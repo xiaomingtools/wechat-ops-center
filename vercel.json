@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "pages/*.html", "use": "@vercel/static" },
+    { "src": "pages/api/*.ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/pages/api/$1" }
+  ]
+}

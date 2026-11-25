@@ -2,12 +2,22 @@
   "name": "wechat-ops-center",
   "version": "1.0.0",
   "description": "经营指挥中心 V3 - 微信公众号内容运营管理中心",
-  "type": "module",
-  "main": "src/server.mjs",
+  "private": true,
   "scripts": {
-    "start": "node src/server.mjs",
-    "start:funnel": "npx tailscale funnel 3001"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "local": "node src/server.mjs"
   },
-  "keywords": ["wechat", "operations", "dashboard", "analytics"],
-  "license": "UNLICENSED"
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@octokit/rest": "^20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
 }
