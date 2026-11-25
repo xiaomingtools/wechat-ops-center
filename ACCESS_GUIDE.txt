@@ -1,0 +1,31 @@
+========================================
+  经营指挥中心 V3 - 远程访问指南
+========================================
+
+【方式一：本机直接访问】
+地址: http://localhost:3001/
+说明: 只有本机可以访问，最安全
+
+【方式二：临时公网（推荐）】
+地址: https://ops-center-wechat.loca.lt
+说明: 
+  - 任意设备可访问
+  - 需要保持此窗口运行
+  - 关闭后链接失效，重新运行会自动生成新链接
+  
+使用方法:
+  npx localtunnel --port 3001 --subdomain ops-center-wechat
+
+【方式三：Tailscale Funnel（需Premium）】
+如果已开通 Tailscale Premium:
+  tailscale funnel 3001
+会生成固定地址如: https://xxx.tailxxxx.ts.net
+
+【数据同步说明】
+本地数据位置: E:/自动盈利系统/公众号运营中心/10_运营数据/
+云端仓库: https://github.com/xiaomingtools/wechat-ops-center
+
+运行以下命令同步数据到云端:
+  powershell -ExecutionPolicy Bypass -File "E:\自动盈利系统\公众号运营中心\wechat-ops-center\sync_and_deploy.ps1"
+
+========================================

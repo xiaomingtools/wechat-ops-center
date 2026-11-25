@@ -1,19 +1,17 @@
 {
   "name": "wechat-ops-center",
-  "version": "1.0.0",
-  "description": "经营指挥中心 V3 - 微信公众号内容运营管理中心",
+  "version": "2.0.0",
+  "description": "经营指挥中心 V4 - 云端数据看板",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "local": "node src/server.mjs"
+    "start": "next start"
   },
   "dependencies": {
     "next": "^14.0.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@octokit/rest": "^20.0.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
