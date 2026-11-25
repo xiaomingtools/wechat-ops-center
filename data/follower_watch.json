@@ -1,9 +1,0 @@
-{
- "state": "OK",
- "total": 11,
- "threshold": 100,
- "alert": false,
- "just_crossed": false,
- "prev_total": 11,
- "checked_at": "2026-11-20T18:26:13+0700"
-}
