@@ -207,8 +207,14 @@ canvas{width:100%!important;height:180px!important;display:block}
 <div class="page" id="page-revenue"></div>
 <!-- ═══ 6 策略与复盘 ═══ -->
 <div class="page" id="page-strategy"></div>
+<!-- ═══ 6b 运营决议与内容计划 ═══ -->
+<div class="page" id="page-resolution"></div>
+<!-- ═══ 6c 每日简报 ═══ -->
+<div class="page" id="page-brief"></div>
 <!-- ═══ 7 经营档案 ═══ -->
 <div class="page" id="page-archive"></div>
+<!-- ═══ 7b 数据更新记录 ═══ -->
+<div class="page" id="page-update"></div>
 <!-- ═══ 8 系统监控 ═══ -->
 <div class="page" id="page-system"></div>
 <!-- ═══ 9 外观设置 ═══ -->
@@ -310,6 +316,9 @@ const I = {
   revenue:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9h4a2 2 0 010 4H9M9 15h5"/></svg>',
   strategy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>',
   archive:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM6 8v12h12V8M9 12h6"/></svg>',
+  brief:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>',
+  resolution:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+  update:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>',
   system:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>',
   theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
 };
@@ -320,7 +329,10 @@ const TABS = [
   {id:'work',name:'工作监督',icon:I.work},
   {id:'revenue',name:'盈利管理',icon:I.revenue},
   {id:'strategy',name:'策略与复盘',icon:I.strategy},
+  {id:'resolution',name:'运营决议',icon:I.resolution},
+  {id:'brief',name:'每日简报',icon:I.brief},
   {id:'archive',name:'经营档案',icon:I.archive},
+  {id:'update',name:'数据更新记录',icon:I.update},
   {id:'system',name:'系统监控',icon:I.system},
   {id:'theme',name:'外观设置',icon:I.theme},
 ];
@@ -370,9 +382,27 @@ function stateBadge(st){
 function renderOverview(){
   const o=D.overview||{};
   const rev=D.revenue||{};
+  const db=o.dataBrief||{};
   const kpi = (num,label,sub,cls='')=>`<div class="kpi"><div class="kpi-num ${cls}">${num}</div><div class="kpi-label">${label}</div><div class="kpi-sub">${sub||''}</div></div>`;
+  // 数据状态徽章映射
+  const stMap={'今日已更新':['b-ok'],'数据无变化':['b-ok'],'正在采集':['b-info'],'等待更新':['b-mute'],'采集失败':['b-crit'],'同步失败':['b-crit'],'登录状态过期':['b-warn'],'数据已过期':['b-warn'],'状态未知':['b-mute']};
+  const stb=stMap[db.dataStatus]||stMap['状态未知'];
+  const latestBrief=D.latestDailyBrief||null;
+  const latestRes=D.latestResolution||null;
+  const latestPlan=D.latestContentPlan||null;
+  const planCore=latestPlan?.plan?.coreDirection||latestPlan?.plan?.schedule?.[0]?.topic||'—';
   let html=`
   ${card('经营总览','数据截至 '+(o.latestCheck?fmtDt(o.latestCheck):'—')+ (o.dataFreshness==='过期'?` · <span class="badge b-warn">已过期</span>`:''))}
+
+  ${card('数据更新状态','看板只查看 · 由 WorkBuddy 自动采集与同步', `<span class="badge ${stb[0]}">${esc(db.dataStatus||'状态未知')}</span>`)}
+  <div class="grid4" style="margin-bottom:6px">
+    <div class="kpi"><div class="kpi-num ${db.dataStatus==='今日已更新'?'ok':''}" style="font-size:18px">${esc(db.latestDataDate||'--')}</div><div class="kpi-label">最新数据日期</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.lastSuccessfulCollectAt?fmtDt(db.lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">最近成功采集</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.lastCloudSyncAt?fmtDt(db.lastCloudSyncAt):'--'}</div><div class="kpi-label">最近云端同步</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.nextPlannedUpdate?fmtDt(db.nextPlannedUpdate):'--'}</div><div class="kpi-label">下次计划更新</div></div>
+  </div>
+  <div class="note">最近采集 ${db.lastCollectAt?fmtDt(db.lastCollectAt):'--'} · 系统检查 ${db.lastSystemCheckAt?fmtDt(db.lastSystemCheckAt):'--'}${db.collectFailureReason?` · <span style="color:var(--crit)">失败原因：${esc(db.collectFailureReason)}</span>`:''}。业务无变化时仍刷新最近成功检查时间，不因数据未变而长期显示未更新。</div>
+
   <div class="grid4" style="margin:14px 0">
     ${kpi(o.followers,'累计粉丝','目标 '+(o.followerTarget||100)+' · '+(o.followerPct||0)+'%', (o.followerPct<30?'crit':''))}
     ${kpi(o.yesterdayReads>0?o.yesterdayReads:'--','昨日阅读','30天 '+(o.totalReaders30d||0), (o.yesterdayReads>0?'':'muted'))}
@@ -392,6 +422,18 @@ function renderOverview(){
     ${D.thisWeekPlan?.tomorrow?`<div class="li"><div class="li-t">${esc(D.thisWeekPlan.tomorrow.title)}</div><div class="li-m">明日 · 待发布</div></div>`:''}
     <div class="card-h" style="margin-bottom:10px">重要异常 ${o.alertCount?`<span class="badge b-crit">${o.alertCount}</span>`:''}</div>
     ${(D.risks||[]).slice(0,3).map(r=>`<div class="li"><div class="li-t">${esc(r.title)} <span class="badge ${r.level==='critical'?'b-crit':r.level==='warning'?'b-warn':'b-info'}">${r.level}</span></div><div class="li-m">${esc(r.desc)}</div></div>`).join('') || emptyState('暂无异常')}
+  </div>
+
+  <div class="grid3" style="margin-top:14px">
+    <div class="card" style="margin:0"><div class="card-h">最新每日简报 ${latestBrief?`<span class="hint">${esc(latestBrief.date)}</span>`:''}</div>
+      ${latestBrief?`<div class="li-m" style="font-size:12px;line-height:1.7">数据状态 ${esc(latestBrief.dataStatus||'未知')} · 粉丝 ${esc(latestBrief.overview?.followers??'--')} · 30天读者 ${esc(latestBrief.overview?.totalReaders30d??'--')}<br>待发布 ${esc(latestBrief.overview?.pendingDrafts??'--')} 篇 · 通关率 ${esc(latestBrief.overview?.passRate??'--')}%</div><div class="note" style="margin-top:8px">完整简报见「每日简报」页</div>`:emptyState('暂无每日简报')}
+    </div>
+    <div class="card" style="margin:0"><div class="card-h">下周运营决议 ${latestRes?`<span class="hint">${esc(latestRes.period||latestRes.next_period||'')}</span>`:''}</div>
+      ${latestRes?`<div class="li-m" style="font-size:12px;line-height:1.7">${(latestRes.resolutions||[]).slice(0,3).map(r=>`· ${esc(r.name)}（${esc(r.category)}）`).join('<br>')||'—'}</div><div class="note" style="margin-top:8px">完整决议与上周验收见「运营决议」页</div>`:emptyState('暂无运营决议')}
+    </div>
+    <div class="card" style="margin:0"><div class="card-h">当前内容更新方向 ${latestPlan?`<span class="hint">${esc(latestPlan.for_period||'')}</span>`:''}</div>
+      ${latestPlan?`<div class="li-m" style="font-size:12px;line-height:1.7">核心：${esc(planCore)}<br>本周计划 ${(latestPlan.plan?.schedule||[]).length} 天选题</div><div class="note" style="margin-top:8px">完整内容计划见「运营决议」页</div>`:emptyState('暂无内容计划')}
+    </div>
   </div>`;
   document.getElementById('page-overview').innerHTML=html;
 }
@@ -589,6 +631,132 @@ function renderStrategy(){
   document.getElementById('page-strategy').innerHTML=html;
 }
 
+/* ═══ 6b 运营决议与内容计划（周度运营闭环）═══ */
+function renderResolution(){
+  const res=D.weeklyResolutions||[];
+  const plans=D.contentPlans||[];
+  let cur=D.latestResolution||null;
+  // 历史决议查询（按年/月/周次，全量在 D.weeklyResolutions）
+  let selIdx=cur?(res.length-1):0;
+  const pick=(i)=>{ cur=res[i]||null; };
+  let html=`
+  ${card('运营决议与内容计划中心','由 WorkBuddy 制定 · 看板仅展示 · 历史不覆盖', cur?`<span class="badge b-info">最新一期</span>`:'')}
+
+  ${(()=>{
+    if(!cur) return `<div class="grid3" style="margin-bottom:12px">${card('本周复盘','暂无','WorkBuddy 周日生成后展示')}${card('下周决议','暂无','—')}${card('内容计划','暂无','—')}</div>` + emptyState('暂无运营决议，等待本周日 20:00 自动生成');
+    const cats={}; (cur.resolutions||[]).forEach(r=>{cats[r.category]=(cats[r.category]||0)+1;});
+    return `<div class="grid4" style="margin-bottom:12px">
+      <div class="kpi"><div class="kpi-num">${esc(cur.period||'--')}</div><div class="kpi-label">复盘周期（本自然周）</div></div>
+      <div class="kpi"><div class="kpi-num">${(cur.resolutions||[]).length}</div><div class="kpi-label">决议条数</div></div>
+      <div class="kpi"><div class="kpi-num muted">${esc(cur.phase||'粉丝积累期')}</div><div class="kpi-label">经营阶段</div></div>
+      <div class="kpi"><div class="kpi-num">${cur.last_week_acceptance?.available?(cur.last_week_acceptance.items?.length||0):'无'}</div><div class="kpi-label">上周决议验收</div></div>
+    </div>`;
+  })()}
+
+  ${(()=>{ const acc=cur?.last_week_acceptance; if(!acc||!acc.available) return card('上周决议执行验收','首期或历史缺失', emptyState(esc(cur?acc?.note||'无上期决议':'')));
+    return card('上周决议执行验收','逐条核验真实数据，证据不足标记待验证',
+      `<div class="note" style="margin-bottom:8px">${esc(acc.note)}</div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>编号</th><th>决议</th><th>验收结果</th><th>说明</th><th>结论</th></tr></thead><tbody>
+      ${acc.items.map(it=>`<tr><td class="muted" style="font-family:monospace">${esc(it.resolutionNo)}</td><td style="max-width:200px">${esc(it.name)}</td>
+      <td><span class="badge ${it.verdict==='验证有效'?'b-ok':it.verdict==='验证无效'?'b-crit':it.verdict==='待验证'?'b-info':'b-mute'}">${esc(it.verdict)}</span></td>
+      <td class="muted" style="max-width:240px">${esc(it.detail)}</td><td>${esc(it.continued?'继续':it.adjustOrStop)}</td></tr>`).join('')}
+      </tbody></table></div>`); })()}
+
+  ${(()=>{ const items=cur?.resolutions||[]; if(!items.length) return '';
+    const order=['继续保持','重点调整','停止执行','新增尝试'];
+    const cname={继续保持:'✅ 继续保持',重点调整:'🔧 重点调整',停止执行:'⛔ 停止执行',新增尝试:'🧪 新增尝试'};
+    return order.filter(c=>items.some(x=>x.category===c)).map(c=>`
+      ${card(cname[c],items.filter(x=>x.category===c).length+' 条')}
+      ${items.filter(x=>x.category===c).map(r=>`<div class="li">
+        <div class="li-t"><span style="font-family:monospace;color:var(--dim);font-size:11px">${esc(r.no)}</span> ${esc(r.name)} <span class="badge ${r.priority==='high'?'b-crit':r.priority==='medium'?'b-warn':'b-info'}">${esc(r.priority)}</span> <span class="badge b-mute">${esc(r.status)}</span></div>
+        <div class="li-m" style="margin-top:6px">问题：${esc(r.problem)}</div>
+        <div class="li-m">依据：${esc(r.evidence)}</div>
+        <div class="li-m">调整前：${esc(r.before)} → 调整后：${esc(r.after)}</div>
+        <div class="li-m">执行要求：${esc(r.action)}</div>
+        <div class="li-m">预期：${esc(r.expectedEffect)} · 时间：${esc(r.timing)} · 验收：${esc(r.acceptanceMetric)}</div>
+      </div>`).join('')}`).join(''); })()}
+
+  ${(()=>{ const p=D.latestContentPlan; if(!p) return card('下周内容更新计划','暂无','由 WorkBuddy 生成后展示');
+    const sc=p.plan?.schedule||[];
+    return card('下周内容更新计划 · '+esc(p.for_period||''),'基于本期决议 · 周一~周日候选选题',
+      `<div class="note" style="margin-bottom:8px">核心方向：${esc(p.plan?.coreDirection||'—')} · 重点 ${(p.plan?.focusCategories||[]).join('、')}${(p.plan?.newTestCategories||[]).length?' · 新增测试 '+(p.plan?.newTestCategories||[]).join('、'):''}${(p.plan?.reduceCategories||[]).length?' · 减少 '+(p.plan?.reduceCategories||[]).join('、'):''}</div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>日</th><th>选题方向</th><th>推荐标题</th><th>依据/需求</th><th>差异化</th><th>决议</th></tr></thead><tbody>
+      ${sc.map(s=>`<tr><td>${esc(s.day)}</td><td>${esc(s.topic)}</td><td style="max-width:220px">${esc(s.title)}</td><td class="muted" style="max-width:180px">${esc(s.basis)}（${esc(s.userNeed)}）</td><td class="muted">${esc(s.differentiation)}</td><td class="muted">${esc(s.resolutionRef)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="note" style="margin-top:8px">发布时间：周二~周四 08:00-09:00 · 验证指标：发布 24h 阅读 ≥ 周均 · 每日实际生产参考最新决议，调整须记录原因</div>`); })()}
+
+  ${(()=>{ const list=res; if(!list.length) return '';
+    return card('历史运营决议','按周期查询 · 完整保留', '默认最新一期');
+    +`<div class="tbl-wrap"><table class="t"><thead><tr><th>周期</th><th>下期</th><th>决议数</th><th>验收</th><th>阶段</th></tr></thead><tbody>
+    ${list.map((x,i)=>`<tr ${i===0?'style="background:color-mix(in srgb,var(--brand) 6%,transparent)"':''}><td>${esc(x.period||'--')}</td><td class="muted">${esc(x.next_period||'--')}</td><td>${x.resolutions?.length||0}</td><td class="muted">${x.last_week_acceptance?.available?(x.last_week_acceptance.items?.length+'条'):'无'}</td><td class="muted">${esc(x.phase||'—')}</td></tr>`).join('')}
+    </tbody></table></div>`; })()}`;
+  document.getElementById('page-resolution').innerHTML=html;
+}
+
+/* ═══ 6c 每日简报 ═══ */
+function renderBrief(){
+  const briefs=D.dailyBriefs||[];
+  let html=`
+  ${card('每日经营简报','WorkBuddy 自动生成 · 独立归档 · 不覆盖历史', briefs.length?`共 ${briefs.length} 期`:'')}
+  ${(()=>{
+    if(!briefs.length) return emptyState('暂无每日简报，等待今日 09:00 自动采集生成');
+    // 默认最新一期
+    const b=briefs[0];
+    const d=b.data||{};
+    const show=(x)=>{ const i=briefs.findIndex(v=>v.date===x.date); if(i>=0) document.getElementById('briefDetail').innerHTML=briefDetail(briefs[i]); };
+    return `
+    <div class="filters" id="briefDateSel" style="margin-bottom:12px">
+      ${briefs.map(x=>`<span class="chip ${x.date===b.date?'on':''}" onclick="document.querySelectorAll('#briefDateSel .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on');briefPick('${esc(x.date)}')">${esc(x.date)}</span>`).join('')}
+    </div>
+    <div id="briefDetail">${briefDetail(b)}</div>`;
+  })()}
+  <div class="note">每日简报独立归档于 10_运营数据/daily_brief/，支持按历史日期查询；数据无变化时仍刷新"最近成功检查时间"，不因此显示为长期未更新。</div>`;
+  document.getElementById('page-brief').innerHTML=html;
+  window.briefPick=(date)=>{ const i=(D.dailyBriefs||[]).findIndex(v=>v.date===date); if(i>=0){ const el=document.getElementById('briefDetail'); if(el) el.innerHTML=briefDetail(D.dailyBriefs[i]); } };
+}
+function briefDetail(b){
+  const d=b.data||{}; const o=b.overview||{};
+  return `
+  <div class="card" style="background:var(--card2)">
+    <div class="card-h">简报 ${esc(b.date)} ${b.dataStatus?`<span class="hint">数据状态：${esc(b.dataStatus)}</span>`:''}</div>
+    <div class="grid4" style="margin-bottom:10px">
+      <div class="kpi"><div class="kpi-num">${esc(o.followers??'--')}</div><div class="kpi-label">累计粉丝 · 本周净增 ${esc(d.yesterday?.followersWeekNet??'未知')}</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(d.yesterday?.reads??o.yesterdayReads??'--')}</div><div class="kpi-label">昨日阅读 ${esc(d.yesterday?.change||'')}</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(o.totalReaders30d??'--')}</div><div class="kpi-label">30天读者</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(o.publishedCount??'--')}<span style="font-size:12px;color:var(--dim)">/${esc(o.pendingDrafts??'--')}</span></div><div class="kpi-label">已发布/待发布</div></div>
+    </div>
+    ${(d.latestArticle?`<div class="li"><div class="li-t">📄 最新：${esc(d.latestArticle.title)}</div><div class="li-m">${esc(d.latestArticle.date)} · ${esc(d.latestArticle.outcome)}</div></div>`:'')}
+    ${(d.topArticles&&d.topArticles.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">近30天 Top</div>${d.topArticles.slice(0,3).map((a,i)=>`<div class="li-m">${i+1}. ${a.reads??'--'} 阅读 · ${esc(a.title)}</div>`).join('')}`:''}
+    ${(d.problems&&d.problems.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">主要问题</div>${d.problems.map(p=>`<div class="li"><div class="li-m"><span class="badge ${p.level==='critical'?'b-crit':p.level==='warning'?'b-warn':'b-info'}">${esc(p.level)}</span> ${esc(p.title)}</div></div>`).join('')}`:''}
+    ${(d.followUps&&d.followUps.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">需持续关注</div><div class="li-m">${esc(d.followUps.join(' · '))}</div>`:''}
+  </div>`;
+}
+
+/* ═══ 7b 数据更新记录 ═══ */
+function renderUpdateLog(){
+  const log=D.dataUpdateLog||[];
+  let html=`
+  ${card('数据更新记录','真实执行台账 · 看板只查看，不启动/暂停/重试任务', log.length?`最近 ${log.length} 条`:'')}
+  ${log.length?`
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>日期</th><th>计划</th><th>实际执行</th><th>采集</th><th>校验</th><th>云同步</th><th>耗时</th><th>异常</th></tr></thead><tbody>
+    ${log.map(x=>{ const v=typeof x.validate_result==='string'?x.validate_result:(x.validate_result?.reason||''); 
+      return `<tr>
+        <td>${esc(x.date||'--')}</td>
+        <td class="muted">${esc(x.planned||'09:00')}</td>
+        <td class="muted">${x.executed_at?fmtDt(x.executed_at):'--'}</td>
+        <td><span class="badge ${x.collect_result==='成功'?'b-ok':'b-crit'}">${esc(x.collect_result||'--')}</span></td>
+        <td class="muted" style="max-width:220px">${esc(v)}</td>
+        <td class="muted">${esc(x.cloud_sync||'--')}</td>
+        <td class="muted">${x.duration_ms!=null?x.duration_ms+'ms':'--'}</td>
+        <td class="muted" style="max-width:160px;color:${x.error_reason?'var(--crit)':'inherit'}">${x.error_reason?esc(x.error_reason):'—'}</td>
+      </tr>`; }).join('')}
+  </tbody></table></div>
+  <div class="note">每日 09:00 主采集 / 12:00 检查补采 / 23:00 工作进度更新；登录态过期时提示重新扫码并补采。看板仅展示真实执行记录。</div>`:emptyState('暂无数据更新记录，等待首次自动采集')}
+  `;
+  document.getElementById('page-update').innerHTML=html;
+}
+
+
 /* ═══ 7 经营档案 ═══ */
 function renderArchive(){
   const ar=D.archives||[];
@@ -699,7 +867,8 @@ function renderAll(){
   if(D.account) document.getElementById('accountName').textContent=D.account+' · 内容运营中心';
   document.getElementById('lastUpdated').textContent='数据更新 '+fmtDt(D.generated_at);
   renderOverview(); renderData(); renderContent(); renderWork();
-  renderRevenue(); renderStrategy(); renderArchive(); renderSystem(); renderThemePanel();
+  renderRevenue(); renderStrategy(); renderResolution(); renderBrief();
+  renderArchive(); renderUpdateLog(); renderSystem(); renderThemePanel();
   showPage('overview');
 }
 

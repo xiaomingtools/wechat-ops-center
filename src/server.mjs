@@ -62,6 +62,19 @@ const latestWr  = wrFiles.length > 0 ? loadJson(join(wrDir, wrFiles[wrFiles.leng
 const follower  = loadJson(join(ROOT, "10_运营数据", "follower_watch.json")) || {};
 const wxSession = loadJson(join(ROOT, "10_运营数据", "wx_session", "status.json")) || {};
 
+// ── V5.2 归档目录（只读真实文件；缺失一律返回空，不虚构）──
+const dbDir   = join(ROOT, "10_运营数据", "daily_brief");
+const wrsDir  = join(ROOT, "10_运营数据", "weekly_resolution");
+const cpDir   = join(ROOT, "10_运营数据", "content_plan");
+const dulDir  = join(ROOT, "10_运营数据", "data_update_log");
+const dbFiles  = listRe(dbDir,  /^\d{4}-\d{2}-\d{2}\.json$/);
+const wrsFiles = listRe(wrsDir, /^\d{4}-\d{2}-\d{2}\.json$/);
+const cpFiles  = listRe(cpDir,  /^\d{4}-\d{2}-\d{2}\.json$/);
+const dulFiles = listRe(dulDir, /(^|\.)\d{4}-\d{2}-\d{2}/);
+function loadArchiveList(files, dir) {
+  return files.map(f => loadJson(join(dir, f))).filter(Boolean);
+}
+
 let perfRows = [];
 try {
   const lines = readFileSync(join(ROOT, "10_运营数据", "article-performance.csv"), "utf8").trim().split("\n").slice(1);
@@ -452,6 +465,58 @@ function collect() {
     sync: { value: follower.checked_at || '', state: dataStale === '过期' ? 'stale' : 'real', source: 'follower_watch.checked_at' },
   };
 
+  // ── V5.2 归档列表（只读真实文件，缺失为空，不虚构）──
+  const dailyBriefs   = loadArchiveList(dbFiles, dbDir);
+  const weeklyResolutions = loadArchiveList(wrsFiles, wrsDir);
+  const contentPlans = loadArchiveList(cpFiles, cpDir);
+  // data_update_log 每个日期文件是当日"多次执行记录"的数组，需展平为统一记录列表
+  const dataUpdateLog = loadArchiveList(dulFiles, dulDir)
+    .reduce((acc, arr) => acc.concat(Array.isArray(arr) ? arr : [arr]), [])
+    .sort((a, b) => {
+      const da = a.executed_at || a.date || '';
+      const db2 = b.executed_at || b.date || '';
+      return da < db2 ? 1 : da > db2 ? -1 : 0;
+    });
+
+  // ── V5.2 数据更新状态（首页展示：最新数据日期/采集/同步/检查/下次更新/状态）──
+  // 业务无变化时也刷新"最近成功检查时间"，不因为数据没变就长期显示未更新。
+  const lastSnapDate = lastSnapFile.replace('snapshot-', '').replace('.json', '') || '';
+  const lastDb = dbFiles.length > 0 ? dbFiles[dbFiles.length - 1].replace('.json', '') : '';
+  const dataBrief = {
+    latestDataDate: lastSnapDate || lastDb || (lastSnapCapture ? lastSnapCapture.slice(0, 10) : ''),
+    lastCollectAt: lastSnapCapture || follower.checked_at || '',
+    lastSuccessfulCollectAt: (dataStale !== '过期' && (lastSnapCapture || follower.checked_at)) ? (lastSnapCapture || follower.checked_at) : '',
+    lastCloudSyncAt: follower.checked_at || '',
+    lastSystemCheckAt: nowIso,
+    nextPlannedUpdate: nextPlannedUpdateISO(),
+    dataStatus: dataStatusOf(),
+    collectFailureReason: '',
+  };
+
+  function nextPlannedUpdateISO() {
+    // 每日 09:00 / 12:00 / 23:00（UTC+8），取下一个
+    const now = new Date();
+    const cands = ['09:00', '12:00', '23:00'].map(t => {
+      const [hh, mm] = t.split(':').map(Number);
+      const d = new Date(now); d.setHours(hh, mm, 0, 0);
+      if (d <= now) d.setDate(d.getDate() + 1);
+      return d.toISOString();
+    });
+    cands.sort();
+    return cands[0];
+  }
+  function dataStatusOf() {
+    if (wxSession.state !== 'LOGGED_IN') return '登录状态过期';
+    if (dataStale === '过期') return '数据已过期';
+    if (lastDb === lastSnapDate || (lastSnapCapture || follower.checked_at)) {
+      const lastGood = lastSnapCapture || follower.checked_at;
+      const todayStr = nowIso.slice(0, 10);
+      const isToday = lastGood && lastGood.slice(0, 10) === todayStr;
+      return isToday ? '今日已更新' : '数据无变化';
+    }
+    return '状态未知';
+  }
+
   appData = {
     generated_at: nowIso,
     account: man.account || "AI工具研究所",
@@ -464,6 +529,7 @@ function collect() {
       wrThisWeek, wrPrevWeek, wrWoW, searchPct, recommendPct,
       latestCheck: follower.checked_at || '',
       dataFreshness: dataStale, dataAgeHours: dataAgeH,
+      dataBrief,
     },
     thisWeekPlan: {
       today:   todayEntry ? { date: todayEntry.business_date, title: todayEntry.title, status: isPublished(webRec[today], draftMap[today]) ? '已发布' : '进行中' } : null,
@@ -483,7 +549,15 @@ function collect() {
     risks,
     userGrowth,
     dataStates,
-    meta: { phase: 'V5.0 全景经营指挥中心', dataSources: [lastSnapFile, 'follower_watch.json', 'weekly_review/', 'web_tutorials/', 'daily_drafts/'] },
+    // V5.2 每日简报 / 周度决议 / 内容计划 / 数据更新记录（只读真实归档；全量随 appdata.json 推送，云端可完整查询，缺失为空）
+    dailyBriefs: dailyBriefs.slice().reverse(),
+    latestDailyBrief: dailyBriefs.length > 0 ? dailyBriefs[dailyBriefs.length - 1] : null,
+    weeklyResolutions: weeklyResolutions.slice().reverse(),
+    latestResolution: weeklyResolutions.length > 0 ? weeklyResolutions[weeklyResolutions.length - 1] : null,
+    contentPlans: contentPlans.slice().reverse(),
+    latestContentPlan: contentPlans.length > 0 ? contentPlans[contentPlans.length - 1] : null,
+    dataUpdateLog: dataUpdateLog,
+    meta: { phase: 'V5.2 经营优化闭环', dataSources: [lastSnapFile, 'follower_watch.json', 'weekly_review/', 'daily_brief/', 'weekly_resolution/', 'content_plan/', 'data_update_log/'] },
   };
 }
 
@@ -516,6 +590,11 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/system") { if (!appData.systemStatus) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ systemStatus: appData.systemStatus, dataStates: appData.dataStates })); return; }
   if (url.pathname === "/api/risks") { if (!appData.risks) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ risks: appData.risks })); return; }
   if (url.pathname === "/api/reviews") { if (!appData.reviews) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ reviews: appData.reviews })); return; }
+  // ── V5.2 端点（只读真实归档，缺失返回空数组，不虚构）──
+  if (url.pathname === "/api/daily-briefs") { if (!appData.dailyBriefs) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ dailyBriefs: appData.dailyBriefs, latest: appData.latestDailyBrief })); return; }
+  if (url.pathname === "/api/resolutions") { if (!appData.weeklyResolutions) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ weeklyResolutions: appData.weeklyResolutions, latest: appData.latestResolution })); return; }
+  if (url.pathname === "/api/content-plans") { if (!appData.contentPlans) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ contentPlans: appData.contentPlans, latest: appData.latestContentPlan })); return; }
+  if (url.pathname === "/api/update-log") { if (!appData.dataUpdateLog) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ dataUpdateLog: appData.dataUpdateLog })); return; }
 
   let filePath = join(__dirname, url.pathname === "/" ? "index.html" : url.pathname);
   if (existsSync(filePath)) {
