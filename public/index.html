@@ -61,7 +61,19 @@ body{background:var(--bg);color:var(--title);font-family:-apple-system,"PingFang
 .card-h::before{content:'';width:4px;height:15px;background:var(--grad);border-radius:2px}
 .card-h .hint{font-size:11px;color:var(--dim);font-weight:400;margin-left:auto}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-@media(max-width:768px){.grid2{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+/* 经营阶段进度轨 */
+.phase-track{display:flex;align-items:flex-start;gap:0;margin:6px 0}
+.phase-node{flex:1;text-align:center;position:relative;font-size:11px;color:var(--dim)}
+.phase-node i{display:block;width:14px;height:14px;border-radius:50%;background:var(--card2);border:2px solid var(--border);margin:0 auto 6px;position:relative;z-index:2}
+.phase-node::before{content:'';position:absolute;top:6px;left:50%;width:100%;height:2px;background:var(--border);z-index:1}
+.phase-node:first-child::before{display:none}
+.phase-node.on i{background:var(--brand);border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in srgb,var(--brand) 20%,transparent)}
+.phase-node.on span{color:var(--title);font-weight:700}
+.phase-node.done i{background:var(--ok);border-color:var(--ok)}
+.phase-node.done span{color:var(--ok)}
+.phase-node.done::before,.phase-node.on::before{background:var(--ok)}
+@media(max-width:768px){.grid2{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.phase-track{flex-wrap:wrap}.phase-node{flex:0 0 33.33%}}
 
 /* ── KPI ── */
 .kpi{padding:15px;background:var(--card2);border:1px solid var(--border);border-radius:12px;position:relative;overflow:hidden}
@@ -479,23 +491,76 @@ function renderWork(){
 /* ═══ 5 盈利管理 ═══ */
 function renderRevenue(){
   const r=D.revenue||{};
-  const notC = !r.connected;
+  const notC=!r.connected;
+  const tm=r.trafficMaster||{};
+  const qk=r.quarkPullNew||{};
+  const gg=r.growthGoals||{};
+  const phases=r.phases||[];
+  const phaseIdx=phases.indexOf(r.phase);
+  // 5 阶段进度（高亮当前阶段）
+  const phaseBar=`<div class="phase-track">${phases.map((p,i)=>`<div class="phase-node ${i===phaseIdx?'on':i<phaseIdx?'done':''}"><i></i><span>${esc(p)}</span></div>`).join('')}</div>`;
+  // 流量主门槛差距条（官方 100/500，内部目标单独标）
+  const offC=tm.officialCondition||{};
+  const tC=offC.commissionThreshold||100, tP=offC.programmaticThreshold||500;
+  const pct=v=>Math.min(100,Math.round((v||0)/tP*100));
   let html=`
-  ${card('盈利中心','流量主 + 夸克拉新', r.connected?'':'<span class="badge b-warn">未接入</span>')}
-  ${notC ? `
-  <div class="empty" style="padding:20px">
-    <div style="font-size:15px;font-weight:700;color:var(--title);margin-bottom:8px">收益数据未接入</div>
-    <div class="muted" style="font-size:13px;line-height:1.7;max-width:420px;margin:0 auto">${esc(r.reason||'暂无真实财务数据')}</div>
-    <div class="note" style="max-width:400px;margin:14px auto 0">未接入的指标一律显示"未接入"，不会把未知金额当成 0 或显示为零值。</div>
-  </div>` : `
-  <div class="grid4">
-    <div class="kpi"><div class="kpi-num">${r.trends?.cumulative??'--'}</div><div class="kpi-label">累计收入</div></div>
-    <div class="kpi"><div class="kpi-num">${r.netProfit?r.netProfit:'--'}</div><div class="kpi-label">净利润</div></div>
-    <div class="kpi"><div class="kpi-num">${r.items?.流量主?.opened?'已开通':'未开通'}</div><div class="kpi-label">流量主</div></div>
-    <div class="kpi"><div class="kpi-num">${r.items?.夸克拉新?.newUsers??'--'}</div><div class="kpi-label">夸克拉新</div></div>
-  </div>`}
-  <div class="card" style="margin-top:12px"><div class="card-h">说明</div>
-  <div class="note">盈利中心仅围绕流量主与夸克网盘拉新展示。成本（AI 服务/服务器）、待结算、盈亏平衡等指标依赖真实财务数据接入后显示，当前不伪造任何金额。</div></div>`;
+  ${card('盈利中心','分阶段经营 · 当前：'+esc(r.phase||'粉丝积累期'), r.phase?`<span class="badge ${phaseIdx<=1?'b-info':'b-ok'}">${esc(r.phase)}</span>`:'<span class="badge b-warn">未接入</span>')}
+
+  ${card('经营阶段','WorkBuddy 提供 · 看板仅展示', r.phaseNote?esc(r.phaseNote):'')}
+  ${phaseBar}
+  <div class="note" style="margin-top:10px">${esc(r.phaseNote||'经营阶段由 WorkBuddy 根据真实经营情况提供，经营指挥中心仅负责展示')}</div>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card" style="margin:0"><div class="card-h">内容运营成果 ${gg.contentOutput?`<span class="hint">通关率 ${gg.contentOutput.passRate||0}%</span>`:''}</div>
+      <div class="grid4" style="margin:0">
+        <div class="kpi"><div class="kpi-num">${gg.contentOutput?.publishedCount?esc(gg.contentOutput.publishedCount):esc(D.overview?.publishedCount??'--')}</div><div class="kpi-label">已发布</div></div>
+        <div class="kpi"><div class="kpi-num">${gg.contentOutput?.pendingDrafts?esc(gg.contentOutput.pendingDrafts):esc(D.overview?.pendingDrafts??'--')}</div><div class="kpi-label">待发布</div></div>
+        <div class="kpi"><div class="kpi-num">${esc(D.overview?.totalArticles??'--')}</div><div class="kpi-label">总文章</div></div>
+        <div class="kpi"><div class="kpi-num ${D.overview?.yesterdayReads>0?'':'muted'}">${esc(D.overview?.yesterdayReads??'--')}</div><div class="kpi-label">昨日阅读</div></div>
+      </div>
+      <div class="note">内容运营是当前经营重点：${esc((gg.focus||['内容运营','流量获取','粉丝积累']).join('、'))}</div></div>
+
+    <div class="card" style="margin:0"><div class="card-h">粉丝增长 · 阅读增长</div>
+      <div class="grid2" style="margin:0;gap:10px">
+        <div class="kpi"><div class="kpi-num">${esc(gg.followerTarget??D.overview?.followers??'--')}<span style="font-size:13px;color:var(--dim)"> 目标</span></div><div class="kpi-label">粉丝目标 · 当前 ${esc(D.overview?.followers??'--')}（${esc(gg.followerProgress??D.overview?.followerPct??0)}%）</div><div class="prog"><i style="width:${esc(gg.followerProgress??D.overview?.followerPct??0)}%"></i></div></div>
+        <div class="kpi"><div class="kpi-num">${esc(gg.readers30d??D.overview?.totalReaders30d??'--')}</div><div class="kpi-label">30天阅读 · 周环比 ${esc(D.overview?.wrWoW??'--')}%</div></div>
+      </div>
+    </div>
+  </div>
+
+  ${card('流量主开通准备','官方门槛分层 · 开通后接入真实收益', tm.opened?'<span class="badge b-ok">已开通</span>':`<span class="badge b-mute">${esc(tm.openStatus||'未开通')}</span>`)}
+  <div class="grid4" style="margin-bottom:10px">
+    <div class="kpi"><div class="kpi-num ${pct(tm.currentFollowers)<pct(tC)?'muted':''}">${esc(tm.currentFollowers??'--')}</div><div class="kpi-label">当前粉丝</div></div>
+    <div class="kpi"><div class="kpi-num ${tm.gapToCommission>0?'warn':'ok'}">${tm.gapToCommission>0?'+'+tm.gapToCommission:'0'}</div><div class="kpi-label">距返佣门槛(${tC})</div></div>
+    <div class="kpi"><div class="kpi-num ${tm.gapToProgrammatic>0?'warn':'ok'}">${tm.gapToProgrammatic>0?'+'+tm.gapToProgrammatic:'0'}</div><div class="kpi-label">距程序化门槛(${tP})</div></div>
+    <div class="kpi"><div class="kpi-num muted">${esc(tm.readiness||'--')}</div><div class="kpi-label">开通准备状态</div></div>
+  </div>
+  <div class="note" style="margin-bottom:6px"><b>官方开通条件</b>（以微信官方最新规则为准，本看板仅展示）：</div>
+  ${(offC.notes||[]).map(n=>`<div class="li"><div class="li-m" style="font-size:12px">· ${esc(n)}</div></div>`).join('')}
+  <div class="note" style="margin-top:10px">⚠️ 内部阶段目标（${esc(tm.internalTarget??'--')} 粉，完成率 ${esc(gg.followerProgress??D.overview?.followerPct??0)}%）为运营参考，<b>非官方开通门槛</b>；官方返佣门槛 ${tC}、程序化门槛 ${tP}，两者严格区分。</div>
+
+  ${card('夸克网盘拉新', qk.started?'<span class="badge b-info">运行中</span>':'<span class="badge b-warn">尚未启动</span>')}
+  <div class="grid4" style="margin-bottom:8px">
+    <div class="kpi"><div class="kpi-num muted">${qk.newUsers?esc(qk.newUsers):'--'}</div><div class="kpi-label">拉新人数</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.commission?esc(qk.commission):'--'}</div><div class="kpi-label">佣金</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.conversionRate?esc(qk.conversionRate):'--'}</div><div class="kpi-label">转化率</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.income?esc(qk.income):'--'}</div><div class="kpi-label">收益</div></div>
+  </div>
+  <div class="note" style="margin-top:6px">当前明确「尚未启动」：${esc(qk.pauseReason||'')}${qk.launchConditionNote?`<br><span style="color:var(--dim)">启动建议：${esc(qk.launchConditionNote)}</span>`:''}</div>
+
+  ${card('WorkBuddy 下一阶段经营计划','由 WorkBuddy 制定 · 看板仅展示', '')}
+  ${(r.nextStagePlan||[]).map((s,i)=>`<div class="li"><div class="li-t" style="font-size:12.5px">${i+1}. ${esc(s)}</div></div>`).join('')||emptyState('暂无计划')}
+
+  ${card('已确认经营成本','仅列已确认实际发生项 · 未发生保持 null，不虚构')}
+  <div class="grid3" style="margin-bottom:8px">
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.ai?esc(r.confirmedCosts.ai):'--'}</div><div class="kpi-label">AI 服务</div></div>
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.server?esc(r.confirmedCosts.server):'--'}</div><div class="kpi-label">服务器</div></div>
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.cumulative?esc(r.confirmedCosts.cumulative):'--'}</div><div class="kpi-label">累计成本</div></div>
+  </div>
+  <div class="note">${esc(r.confirmedCosts?.note||'')}${notC?`<br>净利润 / 待结算 / 盈亏平衡：盈利业务启动并接入真实财务数据后显示，当前 ${esc(r.status||'未接入')}，不伪造金额。`:''}</div>
+
+  <div class="card"><div class="card-h">保留的扩展能力</div>
+  <div class="note">已保留完整盈利数据结构：流量主收入、夸克拉新收入、有效拉新人数、待结算金额、实际到账金额、经营成本、净利润、历史收益趋势。未来正式开展盈利业务后可直接接入，无需重新建设盈利中心。</div></div>`;
   document.getElementById('page-revenue').innerHTML=html;
 }
 

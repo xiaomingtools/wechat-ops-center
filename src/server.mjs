@@ -294,11 +294,89 @@ function collect() {
   wxUserDaily.forEach(u => { if ((u.total || 0) > prevTotal && (u.new || 0) > 0) archives.push({ date: u.date, type: 'growth', title: `新增 ${u.new} 名关注（累计 ${u.total}）`, real: true }); prevTotal = u.total || 0; });
   archives.sort((a, b) => a.date > b.date ? -1 : 1);
 
-  // ── 5.7 盈利中心（未认证订阅号，无收益数据权限 → 全部诚实标注未接入）──
+  // ── 5.7 盈利中心（分阶段经营模型 · 当前处于粉丝积累期，不强行接入未开展业务）──
+  // 原则：经营阶段由 WorkBuddy 根据真实经营情况提供，看板仅展示；
+  //       未产生 / 未接入的收益一律按真实状态显示，不虚构金额、利润、转化数据。
+  const PHASES = ['粉丝积累期', '盈利准备期', '盈利测试期', '正式盈利期', '稳定盈利期'];
+  const currentPhase = '粉丝积累期';   // 由 WorkBuddy 提供；看板仅展示
+
+  // 流量主：官方门槛分层 + 当前差距（严格区分"官方开通门槛"与"内部阶段目标"，不混用）
+  const TM_COMMISSION = 100;   // 官方：返佣商品/短剧推广能力门槛（微信官方运营专员口径）
+  const TM_PROGRAMMATIC = 500; // 官方：程序化广告（流量主核心收益）门槛
+  const trafficMaster = {
+    opened: false,
+    openStatus: '未开通',
+    officialCondition: {
+      commissionThreshold: TM_COMMISSION,
+      programmaticThreshold: TM_PROGRAMMATIC,
+      notes: [
+        `关注用户 ≥${TM_COMMISSION}：可开通「返佣商品 / 短剧推广」能力`,
+        `关注用户 ≥${TM_PROGRAMMATIC}：可开通「程序化广告」（流量主核心展示广告收益）`,
+        '需完成实名认证；无刷粉行为；同主体流量主 < 20',
+        '与账号是否认证无关（未认证订阅号亦可开通，但须实名认证）',
+        '以上门槛以微信官方最新规则为准，本看板仅作展示，不作为承诺',
+      ],
+    },
+    currentFollowers: followers,
+    gapToCommission: Math.max(0, TM_COMMISSION - followers),
+    gapToProgrammatic: Math.max(0, TM_PROGRAMMATIC - followers),
+    internalTarget: followerTarget,            // 内部阶段性目标（followerTarget），仅参考，非官方门槛
+    internalGap: Math.max(0, followerTarget - followers),
+    readiness: followers >= TM_PROGRAMMATIC ? '已具备开通条件' : (followers >= TM_COMMISSION ? '可先开通返佣能力' : '粉丝积累中，未达最低门槛'),
+    income: null, pendingSettle: null, settled: null,   // 开通后接入真实收益数据
+  };
+
+  // 夸克网盘拉新：当前明确「尚未启动」；保留未来统计能力，不接入、不强制注册、不增加成本
+  const quarkPullNew = {
+    status: '尚未启动',
+    started: false,
+    pauseReason: '粉丝积累期：当前经营重点为内容运营、流量获取与粉丝积累，暂不启动拉新业务',
+    newUsers: null, commission: null, settlement: null,
+    pendingSettle: null, converted: null, conversionRate: null, income: null,
+    launchConditionNote: '启动时间与启动条件由 WorkBuddy 根据实际粉丝增长、阅读表现与经营情况提出建议，经用户确认后执行；不擅自设定必须达到多少粉丝才能启动',
+  };
+
+  // 增长目标（内容运营重点，由 WorkBuddy 提供；看板仅展示）
+  const growthGoals = {
+    phase: currentPhase,
+    focus: ['内容运营', '流量获取', '粉丝积累'],
+    followerTarget, followerProgress: followerPct,
+    readers30d: totalReaders30d,
+    readersWoW: wrWoW,
+    contentOutput: { totalArticles, publishedCount, pendingDrafts, passRate },
+  };
+
+  // 下一阶段经营计划（由 WorkBuddy 提供；看板仅展示，不自行制定）
+  const nextStagePlan = [
+    '扩大内容产量与 SEO 关键词覆盖，提升搜一搜等搜索流量占比',
+    '稳定日更节奏，优先清空待发布草稿以维持更新',
+    `在文章末尾增加引导关注互动话术，推动粉丝突破 ${TM_COMMISSION}（返佣能力门槛）`,
+    `粉丝达 ${TM_COMMISSION} 后申请开通返佣商品/短剧推广；达 ${TM_PROGRAMMATIC} 后开通程序化广告（流量主）`,
+    '完成账号实名认证，满足流量主开通的前置条件',
+    '夸克网盘拉新暂不启动；待粉丝与阅读表现达标并经用户确认后，由 WorkBuddy 提出启动建议',
+  ];
+
+  // 已确认的实际经营成本（仅列已知项；未发生则保持 null，不虚构金额）
+  const confirmedCosts = {
+    ai: null, server: null, cumulative: null,
+    note: '当前未产生已确认的固定盈利成本；成本项在真实发生并确认后填入，未发生一律保持 null',
+  };
+
   const revenue = {
+    // 向后兼容旧字段（旧前端/旧数据仍可读）
     connected: false,
     status: '未接入',
-    reason: '未认证订阅号：流量主与夸克拉新收益无数据权限，暂无真实财务数据',
+    reason: '当前处于粉丝积累期，盈利业务尚未启动，暂无真实收益数据；未产生 / 未接入的收益按实际状态显示，不虚构',
+    // 分阶段经营模型（V5.1 盈利中心专项调整）
+    phase: currentPhase,
+    phases: PHASES,
+    phaseNote: '经营阶段由 WorkBuddy 根据真实经营情况提供，经营指挥中心仅负责展示',
+    trafficMaster,
+    quarkPullNew,
+    growthGoals,
+    nextStagePlan,
+    confirmedCosts,
+    // 保留未来扩展位（正式盈利后直接填充，无需重新建设）
     items: {
       流量主: { connected: false, opened: false, income: null, pendingSettle: null, settled: null },
       夸克拉新: { connected: false, newUsers: null, income: null },
@@ -337,7 +415,7 @@ function collect() {
   if (wrWoW < -30) risks.push({ level: 'critical', code: 'READ_DROP', title: '阅读量暴跌', desc: `本周 ${wrThisWeek} vs 上周 ${wrPrevWeek}（${wrWoW}%）`, since: latestWr.generated_at || '', status: '未处理', scope: '流量' });
   if (followers <= 15) risks.push({ level: 'warning', code: 'FOLLOWS', title: '粉丝增长停滞', desc: `累计 ${followers}，近一周新增 0`, since: follower.checked_at || '', status: '未处理', scope: '用户增长' });
   blocked.slice(-3).forEach(b => risks.push({ level: 'warning', code: 'PUBLISH_BLOCKED', title: '发布被拦截', desc: b.reason || b.file || '未知原因', since: b.date, status: '已记录', scope: '内容发布' }));
-  if (!revenue.connected) risks.push({ level: 'info', code: 'REVENUE_NOT_CONNECTED', title: '盈利数据未接入', desc: revenue.reason, since: nowIso, status: '已知限制', scope: '盈利中心' });
+  if (!revenue.connected) risks.push({ level: 'info', code: 'REVENUE_NOT_STARTED', title: '盈利业务尚未启动', desc: `当前「${revenue.phase}」：${revenue.quarkPullNew?.pauseReason || revenue.reason}`, since: nowIso, status: '已知阶段', scope: '盈利中心' });
   const riskLevels = ['critical', 'warning', 'info'];
   risks.sort((a, b) => riskLevels.indexOf(a.level) - riskLevels.indexOf(b.level));
 
