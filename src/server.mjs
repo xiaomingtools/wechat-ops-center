@@ -48,7 +48,9 @@ for (const f of listRe(join(ROOT, "10_运营数据", "daily_drafts"), /\.json$/)
   }
 }
 
-const wxSnap   = loadJson(join(ROOT, "10_运营数据", "wechat_backend", "snapshot-2026-11-09.json")) || {};
+const snapDir = join(ROOT, "10_运营数据", "wechat_backend");
+const snapFiles = listRe(snapDir, /^snapshot-\d{4}-\d{2}-\d{2}\.json$/);
+const wxSnap   = snapFiles.length > 0 ? loadJson(join(snapDir, snapFiles[snapFiles.length - 1])) || {} : {};
 const wxHome   = wxSnap.home || {};
 const wxContent = wxSnap.content_analysis_30d || {};
 const wxUserDaily = wxSnap.user_analysis_daily || [];
@@ -93,7 +95,7 @@ function collect() {
 
   const yesterdayReads  = parseInt(wxHome["昨日阅读人数"]) || 0;
   const yesterdayChange = wxHome["昨日阅读环比"] || "N/A";
-  const totalReaders30d = wxContent.readers_total || 0;
+  const totalReaders30d = wxContent.readers_total || wxContent.readers_total_estimate || 0;
   const topArticles     = wxContent.top_articles || [];
   const wrThisWeek      = latestWr.reads?.this_week || 0;
   const wrPrevWeek      = latestWr.reads?.prev_week || 0;
