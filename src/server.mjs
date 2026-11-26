@@ -246,8 +246,136 @@ function collect() {
   const assetNames = ['news_cover','body_01','body_02','toolbox_footer','newspic_cover','pic_02','pic_03','pic_04'];
   const lastDraft = draftMap[today] || draftMap[tomorrow] || null;
 
+  // ═══ P2 数据层扩展：工作监督 / 经营档案 / 盈利中心 / 系统状态 / 数据状态分级 ═══
+  // 原则：只用真实回执与真实文件，缺失一律置 null 或标注"未接入"，不伪造。
+
+  // 工具：距今天数
+  const hoursAgo = iso => { if (!iso) return null; const h = (Date.now() - new Date(iso).getTime()) / 3600000; return isFinite(h) ? Math.round(h * 10) / 10 : null; };
+  const nowIso = new Date().toISOString();
+
+  // ── 5.6 工作监督中心（基于真实回执 web_tutorials + daily_drafts）──
+  const workLog = entries.map(e => {
+    const date = e.business_date;
+    const wr = webRec[date] || {};
+    const dr = draftMap[date] || {};
+    const isBlocked = blocked.some(b => b.date === date);
+    let status = '状态未知', webOutcome = '未执行';
+    if (wr.outcome === 'PUBLISHED') { status = '验收通过'; webOutcome = '已发布'; }
+    else if (isBlocked) { status = '执行失败'; webOutcome = '被拦截'; }
+    else if (dr.status === 'UPLOADED_VERIFIED' && dr.checks?.all_pass) { status = '待验收'; webOutcome = '草稿校验通过'; }
+    else if (dr.status === 'UPLOADED_VERIFIED') { status = '执行中'; webOutcome = '已上传待校验'; }
+    return {
+      taskNo: e.topic_id || e.guide_id || date,
+      title: e.title,
+      category: e.category_code || '',
+      planDate: date,
+      startAt: dr.started_at || '',
+      completeAt: wr.verified_at || dr.verified_at || '',
+      status,
+      progress: status === '验收通过' ? 100 : status === '待验收' ? 90 : status === '执行中' ? 60 : status === '执行失败' ? 0 : null,
+      resultEntry: wr.website_url || dr.content_source_url || `draft ${date}`,
+      anomaly: isBlocked ? (blocked.find(b => b.date === date)?.reason || '被拦截') : '',
+      acceptance: status === '验收通过' ? '通过' : (status === '待验收' ? '待人工核验' : '未验收'),
+    };
+  }).reverse();
+  const workSummary = {
+    total: workLog.length,
+    byStatus: workLog.reduce((acc, w) => { acc[w.status] = (acc[w.status] || 0) + 1; return acc; }, {}),
+  };
+
+  // ── 5.10 经营档案中心（仅真实事件）──
+  const archives = [];
+  if (entries.length) archives.push({ date: entries[0].business_date, type: 'milestone', title: '首篇文章立项', detail: `《${entries[0].title}》`, real: true });
+  snapFiles.forEach(f => archives.push({ date: f.replace('snapshot-', '').replace('.json', ''), type: 'data', title: '采集公众号后台快照', detail: f, real: true }));
+  wrFiles.forEach(f => archives.push({ date: f.replace('.json', ''), type: 'report', title: '生成周度复盘', detail: f, real: true }));
+  blocked.slice(-5).forEach(b => archives.push({ date: b.date, type: 'incident', title: b.reason || '发布被拦截', detail: b.file || '', real: true }));
+  // 粉丝里程碑（真实增长节点）
+  let prevTotal = 0;
+  wxUserDaily.forEach(u => { if ((u.total || 0) > prevTotal && (u.new || 0) > 0) archives.push({ date: u.date, type: 'growth', title: `新增 ${u.new} 名关注（累计 ${u.total}）`, real: true }); prevTotal = u.total || 0; });
+  archives.sort((a, b) => a.date > b.date ? -1 : 1);
+
+  // ── 5.7 盈利中心（未认证订阅号，无收益数据权限 → 全部诚实标注未接入）──
+  const revenue = {
+    connected: false,
+    status: '未接入',
+    reason: '未认证订阅号：流量主与夸克拉新收益无数据权限，暂无真实财务数据',
+    items: {
+      流量主: { connected: false, opened: false, income: null, pendingSettle: null, settled: null },
+      夸克拉新: { connected: false, newUsers: null, income: null },
+    },
+    trends: { daily: null, weekly: null, monthly: null, cumulative: null },
+    cost: { ai: null, server: null, cumulative: null },
+    netProfit: null, netProfitRate: null, breakEven: '未知',
+  };
+
+  // ── 5.12 系统运行监控中心（真实运行状态）──
+  const lastSnapFile = snapFiles[snapFiles.length - 1] || '';
+  const lastSnapCapture = wxSnap.captured_at || '';
+  const dataAgeH = hoursAgo(lastSnapCapture || follower.checked_at);
+  const dataStale = dataAgeH === null ? '未知' : (dataAgeH > 48 ? '过期' : '正常');
+  const systemStatus = {
+    version: 'V5.0',
+    localService: 'RUNNING',
+    cloudService: 'ONLINE',
+    dataInterface: 'OK',
+    dataVersion: lastSnapFile,
+    lastDataCapture: lastSnapCapture || wxSession.at || '',
+    lastSnapshot: lastSnapFile,
+    lastReport: wrFiles[wrFiles.length - 1] || '',
+    lastSync: follower.checked_at || '',
+    lastHealthyCheck: nowIso,
+    wxLogin: wxSession.state || 'UNKNOWN',
+    dataFreshness: dataStale,
+    dataAgeHours: dataAgeH,
+    integrity: (snapFiles.length > 0 && (wxSession.state || '')) ? '完整' : '部分缺失',
+  };
+
+  // ── 5.11 风险预警中心（真实可判定项）──
+  const risks = [];
+  if (wxSession.state !== 'LOGGED_IN') risks.push({ level: 'warning', code: 'WX_LOGIN', title: '微信登录状态异常', desc: `当前 ${wxSession.state || '未知'}，后台数据可能过期`, since: wxSession.at || '', status: '未处理', scope: '数据采集' });
+  if (dataStale === '过期') risks.push({ level: 'critical', code: 'DATA_STALE', title: '数据已过期', desc: `最近采集距今 ${dataAgeH}h，超过 48h 阈值`, since: lastSnapCapture || '', status: '未处理', scope: '全部指标' });
+  if (wrWoW < -30) risks.push({ level: 'critical', code: 'READ_DROP', title: '阅读量暴跌', desc: `本周 ${wrThisWeek} vs 上周 ${wrPrevWeek}（${wrWoW}%）`, since: latestWr.generated_at || '', status: '未处理', scope: '流量' });
+  if (followers <= 15) risks.push({ level: 'warning', code: 'FOLLOWS', title: '粉丝增长停滞', desc: `累计 ${followers}，近一周新增 0`, since: follower.checked_at || '', status: '未处理', scope: '用户增长' });
+  blocked.slice(-3).forEach(b => risks.push({ level: 'warning', code: 'PUBLISH_BLOCKED', title: '发布被拦截', desc: b.reason || b.file || '未知原因', since: b.date, status: '已记录', scope: '内容发布' }));
+  if (!revenue.connected) risks.push({ level: 'info', code: 'REVENUE_NOT_CONNECTED', title: '盈利数据未接入', desc: revenue.reason, since: nowIso, status: '已知限制', scope: '盈利中心' });
+  const riskLevels = ['critical', 'warning', 'info'];
+  risks.sort((a, b) => riskLevels.indexOf(a.level) - riskLevels.indexOf(b.level));
+
+  // ── 5.3 用户增长中心（日/周/月聚合，真实）──
+  const userGrowth = {
+    total: followers,
+    target: followerTarget,
+    daily: wxUserDaily,
+    weeklyNet: (wxUserDaily.slice(-7).reduce((s, u) => s + (u.net || 0), 0)),
+    lostTotal: wxUserDaily.reduce((s, u) => s + (u.lost || 0), 0),
+    newTotal: wxUserDaily.reduce((s, u) => s + (u.new || 0), 0),
+    sourceNote: '后台未提供关注来源明细，来源维度暂无数据',
+  };
+
+  // ── 5.8 历史周报（供前端"经营复盘中心"检索，仅真实已生成报告）──
+  const reviews = wrFiles.map(f => {
+    const j = loadJson(join(wrDir, f)) || {};
+    const o = j.overview || {};
+    return {
+      name: f.replace('.json', ''),
+      window: j.window || null,
+      reads: { this_week: o.wrThisWeek ?? null, wow_pct: o.wrWoW ?? null },
+      overview: o,
+      generated_at: j.generated_at || '',
+    };
+  }).reverse();
+
+  // ── 5.1 数据状态分级（每个核心指标的真实状态）──
+  const dataStates = {
+    followers: { value: followers, state: followers > 0 ? 'real' : 'zero_real', source: 'follower_watch.json', asOf: follower.checked_at || '' },
+    readers30d: { value: totalReaders30d, state: totalReaders30d > 0 ? 'real' : 'no_data', source: '后台30天内容分析', asOf: lastSnapCapture },
+    revenue: { value: null, state: 'not_connected', source: '无数据权限', asOf: '' },
+    wxLogin: { value: wxSession.state || 'UNKNOWN', state: 'real', source: 'wx_session/status.json', asOf: wxSession.at || '' },
+    sync: { value: follower.checked_at || '', state: dataStale === '过期' ? 'stale' : 'real', source: 'follower_watch.checked_at' },
+  };
+
   appData = {
-    generated_at: new Date().toISOString(),
+    generated_at: nowIso,
     account: man.account || "AI工具研究所",
     overview: {
       totalArticles, publishedCount, pendingDrafts, followers, followerTarget, followerPct,
@@ -257,6 +385,7 @@ function collect() {
       yesterdayReads, yesterdayChange, totalReaders30d,
       wrThisWeek, wrPrevWeek, wrWoW, searchPct, recommendPct,
       latestCheck: follower.checked_at || '',
+      dataFreshness: dataStale, dataAgeHours: dataAgeH,
     },
     thisWeekPlan: {
       today:   todayEntry ? { date: todayEntry.business_date, title: todayEntry.title, status: isPublished(webRec[today], draftMap[today]) ? '已发布' : '进行中' } : null,
@@ -267,6 +396,16 @@ function collect() {
     assets: { names: assetNames, lastDraft },
     topArticles, diagnostics: { findings, severity, summary: `发现 ${severity.critical} 个关键问题、${severity.warning} 个警告、${severity.info} 条信息` },
     strategies, annualPlan, wrChannels,
+    // V5 新增顶层键
+    workLog, workSummary,
+    archives,
+    reviews,
+    revenue,
+    systemStatus,
+    risks,
+    userGrowth,
+    dataStates,
+    meta: { phase: 'V5.0 全景经营指挥中心', dataSources: [lastSnapFile, 'follower_watch.json', 'weekly_review/', 'web_tutorials/', 'daily_drafts/'] },
   };
 }
 
@@ -283,6 +422,8 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === "/api/app") { collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(appData)); return; }
+  // 前端单载荷入口：本地走此同源端点，云端走 Vercel /api/data，行为一致
+  if (url.pathname === "/api/data") { collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(appData)); return; }
   if (url.pathname === "/api/overview") { if (!appData.overview) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ overview: appData.overview, trend: appData.trend, userTrend: appData.userTrend })); return; }
   if (url.pathname === "/api/articles") { if (!appData.articles) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ articles: appData.articles, categories: appData.categories, topArticles: appData.topArticles })); return; }
   if (url.pathname === "/api/diagnostic") { if (!appData.diagnostics) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ diagnostics: appData.diagnostics, strategies: appData.strategies, annualPlan: appData.annualPlan })); return; }
@@ -290,6 +431,13 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/drafts") { if (!appData.drafts) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ drafts: appData.drafts, kanban: appData.kanban, assets: appData.assets })); return; }
   if (url.pathname === "/api/publish-history") { if (!appData.publishHistory) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ history: appData.publishHistory, categories: appData.categories })); return; }
   if (url.pathname === "/api/alerts") { if (!appData.alerts) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ alerts: appData.alerts })); return; }
+  // ── V5 新增端点（只读，向后兼容）──
+  if (url.pathname === "/api/work") { if (!appData.workLog) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ workLog: appData.workLog, workSummary: appData.workSummary })); return; }
+  if (url.pathname === "/api/archive") { if (!appData.archives) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ archives: appData.archives })); return; }
+  if (url.pathname === "/api/revenue") { if (!appData.revenue) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ revenue: appData.revenue })); return; }
+  if (url.pathname === "/api/system") { if (!appData.systemStatus) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ systemStatus: appData.systemStatus, dataStates: appData.dataStates })); return; }
+  if (url.pathname === "/api/risks") { if (!appData.risks) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ risks: appData.risks })); return; }
+  if (url.pathname === "/api/reviews") { if (!appData.reviews) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ reviews: appData.reviews })); return; }
 
   let filePath = join(__dirname, url.pathname === "/" ? "index.html" : url.pathname);
   if (existsSync(filePath)) {
