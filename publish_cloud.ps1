@@ -100,8 +100,16 @@ $wc.Dispose()
 git add data/appdata.json
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm"
 git commit -m "sync: refresh cloud data appdata.json @ $ts" | Out-Null
-git push origin $BRANCH 2>&1 | Out-Null
-Write-Host "      data updated & pushed to GitHub" -ForegroundColor Green
+# PS5.1: git push writes its progress to stderr; capturing with 2>&1 triggers
+# NativeCommandError even on success. Run it plain and inspect $LASTEXITCODE.
+git push origin $BRANCH
+$pushExit = $LASTEXITCODE
+if ($pushExit -eq 0) {
+  Write-Host "      data updated & pushed to GitHub" -ForegroundColor Green
+} else {
+  Write-Error "git push failed (exit $pushExit) - cloud data NOT yet pushed"
+  exit 1
+}
 
 # ---- 4. redeploy Vercel (optional) ----
 if ($SkipVercel) {
