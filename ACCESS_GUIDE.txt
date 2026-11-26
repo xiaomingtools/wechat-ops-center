@@ -1,31 +1,43 @@
 ========================================
-  经营指挥中心 V3 - 远程访问指南
+  经营指挥中心 - 官方访问地址（固定）
 ========================================
 
-【方式一：本机直接访问】
-地址: http://localhost:3001/
-说明: 只有本机可以访问，最安全
+【固定网址（对外统一用这个，永久不变）】
+  https://wechat-ops-center.vercel.app/
 
-【方式二：临时公网（推荐）】
-地址: https://ops-center-wechat.loca.lt
-说明: 
-  - 任意设备可访问
-  - 需要保持此窗口运行
-  - 关闭后链接失效，重新运行会自动生成新链接
-  
-使用方法:
-  npx localtunnel --port 3001 --subdomain ops-center-wechat
+说明:
+  - 这是 Vercel 的 production 固定 alias，跨所有部署不变
+  - 每次发布只会换掉带 ID 的临时链接（wechat-ops-center-xxxx...vercel.app），
+    这个不带 ID 的固定地址永远指向最新生产版
+  - 任何文档、脚本、对外分享，一律用这个固定地址，不要写带 ID 的临时链接
 
-【方式三：Tailscale Funnel（需Premium）】
-如果已开通 Tailscale Premium:
-  tailscale funnel 3001
-会生成固定地址如: https://xxx.tailxxxx.ts.net
 
-【数据同步说明】
+========================================
+  本地访问（开发/调试）
+========================================
+  http://localhost:3001/
+启动:  node src/server.mjs   （或双击 start.bat）
+
+
+========================================
+  数据如何更新到固定网址
+========================================
 本地数据位置: E:/自动盈利系统/公众号运营中心/10_运营数据/
 云端仓库: https://github.com/xiaomingtools/wechat-ops-center
 
-运行以下命令同步数据到云端:
-  powershell -ExecutionPolicy Bypass -File "E:\自动盈利系统\公众号运营中心\wechat-ops-center\sync_and_deploy.ps1"
+一键同步（拉最新数据 -> 推 GitHub -> 重新部署固定网址）:
+  powershell -NoProfile -ExecutionPolicy Bypass -File "E:\自动盈利系统\公众号运营中心\wechat-ops-center\publish_cloud.ps1"
+
+说明:
+  - publish_cloud.ps1 走幂等逻辑：业务数据没变（只有时间戳不同）会安全跳过，不会误推
+  - 数据靠公开仓库 raw.githubusercontent.com/data/appdata.json 给固定网址供数
+
+
+========================================
+  已废弃的旧方案（不要再依赖）
+========================================
+  - localtunnel 临时公网（ops-center-wechat.loca.lt）：关窗口即失效，仅临时演示用
+  - Tailscale Funnel（xxx.ts.net）：需 Premium，非首选
+  固定网址统一用上面的 Vercel production alias。
 
 ========================================

@@ -4,6 +4,18 @@
 
 ## 快速启动
 
+### 官方固定网址（对外统一用这个）
+```
+https://wechat-ops-center.vercel.app/
+```
+这是 Vercel 的 production 固定 alias，跨所有部署不变。每次发布只换带 ID 的临时链接，
+这个不带 ID 的地址永远指向最新生产版。**文档、脚本、对外分享一律用它，不要写带 ID 的临时链接。**
+
+数据更新到该固定网址（一键同步）:
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File publish_cloud.ps1
+```
+
 ### 方式一：本地访问
 ```bash
 双击 start.bat
@@ -12,11 +24,11 @@ node src/server.mjs
 ```
 访问: http://localhost:3001/
 
-### 方式二：Tailscale 公网访问
+### 方式二：Tailscale 公网访问（可选，已非首选）
 ```bash
 双击 start_funnel.bat
 ```
-需要 Tailscale Premium 账户。
+需要 Tailscale Premium 账户。固定网址已改用上方 Vercel alias，此方式仅临时演示。
 
 ## 技术栈
 
