@@ -1,6 +1,8 @@
 // ============================================================
-// 经营指挥中心 V3 · 深度运营仪表盘（浅色品牌版）
+// 经营指挥中心 V6.0 · 经营监督与决议追踪中心
 // 数据源：manifest / web_tutorials / daily_drafts / wechat_backend / weekly_review
+//         + V5.2 每日简报 / 周度决议 / 内容计划 / 数据更新台账
+//         + V6.0 经营日历 / 文章生命周期 / 经营实验 / 经验沉淀 / 经营目标追踪
 // ============================================================
 import http from "node:http";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -89,6 +91,11 @@ try {
 
 // ─── build ──────────────────────────────────────────────────
 function collect() {
+  // 流量主官方门槛（提升为 collect() 顶部常量，供 annualPlan / businessGoals / revenue 等跨段引用；
+  // 此前 const 声明在 P2 段内却被更早的 annualPlan 引用，产生 TDZ 运行时 ReferenceError，现统一上提至函数顶部）
+  const TM_COMMISSION = 100;   // 官方：返佣商品/短剧推广能力门槛（微信官方运营专员口径）
+  const TM_PROGRAMMATIC = 500; // 官方：程序化广告（流量主核心收益）门槛
+
   const today    = new Date().toISOString().slice(0, 10);
   const todayObj = new Date(today);
   const tomorrow = (() => { const d = new Date(todayObj); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
@@ -251,8 +258,8 @@ function collect() {
     },
     monthlyTargets: [],   // 由 WorkBuddy 提供后填入；无真实目标数据时保持空，不写死假 actual
     keyMilestones: [
-      { date: '粉丝达 100', milestone: '可开通返佣商品/短剧推广（微信官方门槛）', status: followers >= 100 ? '已达成' : '进行中' },
-      { date: '粉丝达 500', milestone: '可开通程序化广告（流量主核心收益，微信官方门槛）', status: followers >= 500 ? '已达成' : '进行中' },
+      { date: '粉丝达 ' + TM_COMMISSION, milestone: '可开通返佣商品/短剧推广（微信官方门槛）', status: followers >= TM_COMMISSION ? '已达成' : '进行中' },
+      { date: '粉丝达 ' + TM_PROGRAMMATIC, milestone: '可开通程序化广告（流量主核心收益，微信官方门槛）', status: followers >= TM_PROGRAMMATIC ? '已达成' : '进行中' },
     ],
   };
 
@@ -314,8 +321,7 @@ function collect() {
   const currentPhase = '粉丝积累期';   // 由 WorkBuddy 提供；看板仅展示
 
   // 流量主：官方门槛分层 + 当前差距（严格区分"官方开通门槛"与"内部阶段目标"，不混用）
-  const TM_COMMISSION = 100;   // 官方：返佣商品/短剧推广能力门槛（微信官方运营专员口径）
-  const TM_PROGRAMMATIC = 500; // 官方：程序化广告（流量主核心收益）门槛
+  // TM_COMMISSION / TM_PROGRAMMATIC 已在 P2 段开头（函数作用域）统一声明，此处直接引用
   const trafficMaster = {
     opened: false,
     openStatus: '未开通',
