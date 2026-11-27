@@ -64,6 +64,10 @@ function buildBrief(app, w) {
   const latestArt = (app.publishHistory || app.articles || [])[0] || null;
   const risks = (app.risks || []).filter(r => r.level !== 'info');
 
+  // 最新周度运营决议与内容计划（用于简报展示）
+  const latestRes = app.latestResolution;
+  const latestPlan = app.latestContentPlan;
+
   const data = {
     yesterday: {
       reads: yest,
@@ -79,12 +83,27 @@ function buildBrief(app, w) {
     topArticles: top,
     problems: risks,
     followUps: ['持续跟踪粉丝净增长', '维护内容日更节奏', '监控搜索/推荐流量占比'],
+    // 新增：本周运营决议摘要
+    latestResolution: latestRes ? {
+      period: latestRes.period,
+      nextPeriod: latestRes.next_period,
+      phase: latestRes.phase,
+      resolutionsCount: latestRes.resolutions?.length || 0,
+      acceptance: latestRes.last_week_acceptance,
+      resolutions: latestRes.resolutions?.map(r => ({ no: r.no, name: r.name, category: r.category, priority: r.priority, action: r.action, acceptanceMetric: r.acceptanceMetric }))
+    } : null,
+    // 新增：本周内容计划摘要
+    latestContentPlan: latestPlan ? {
+      forPeriod: latestPlan.for_period,
+      coreDirection: latestPlan.plan?.coreDirection,
+      schedule: latestPlan.plan?.schedule?.map(s => ({ day: s.day, topic: s.topic, title: s.title, resolutionRef: s.resolutionRef })) || []
+    } : null,
   };
 
   const lines = [];
   lines.push(`# 每日经营简报 ${w.date}`);
   lines.push('');
-  lines.push(`> 账号：${app.account} · 数据截至 ${o.latestCheck || '—'} · 数据状态 ${latestDb.dataStatus || '未知'} · 生成于 ${new Date().toLocaleString('zh-CN')}`);
+  lines.push(`> 账号：${app.account} · 数据截至 ${o.latestCheck || '—'} · 数据状态 ${latestDb.overallStatus || latestDb.dataStatus || '未知'} · 生成于 ${new Date().toLocaleString('zh-CN')}`);
   lines.push('');
   lines.push('## 一、昨日经营数据');
   lines.push('');
@@ -98,7 +117,7 @@ function buildBrief(app, w) {
 
   lines.push('## 二、粉丝与阅读变化');
   lines.push('');
-  lines.push(`- 累计粉丝 ${o.followers ?? '未知'}（目标 ${o.followerTarget}，进度 ${o.followerPct ?? 0}%，还差 ${Math.max(0, (o.followerTarget || 0) - (o.followers || 0))}）`);
+  lines.push(`- 累计粉丝 ${o.followers ?? '未知'}（目标 ${o.followerTarget}，进度 ${o.followerPct ?? 0}%，还差 ${Math.max(0, (o.followerTarget || 0) - (o.followers || 0))})`);
   lines.push(`- 本周阅读 ${o.wrThisWeek ?? '暂无'}，上周 ${o.wrPrevWeek ?? '暂无'}，环比 ${wow === 0 ? '持平' : (wow > 0 ? '+' + wow + '%' : wow + '%')}`);
   lines.push(`- 流量结构：搜一搜 ${o.searchPct ?? '暂无'}% / 推荐 ${o.recommendPct ?? '暂无'}%${(app.wrChannels && Object.keys(app.wrChannels).length) ? '；' + Object.entries(app.wrChannels).map(([k, v]) => `${k} ${v}%`).join('、') : ''}`);
   lines.push('');
@@ -122,7 +141,7 @@ function buildBrief(app, w) {
   lines.push('');
   const ws = app.workSummary || {};
   lines.push(`- 工作记录 ${ws.total ?? 0} 条` + (ws.byStatus ? ' · ' + Object.entries(ws.byStatus).map(([k, v]) => `${k} ${v}`).join('、') : ''));
-  lines.push(`- 数据更新状态：${latestDb.dataStatus || '未知'}（最近采集 ${latestDb.lastCollectAt || '—'}）`);
+  lines.push(`- 数据更新状态：${latestDb.overallStatus || latestDb.dataStatus || '未知'}（最近采集 ${latestDb.lastCollectAt || latestDb.lastSuccessfulCollectAt || '—'}）`);
   lines.push('');
 
   lines.push('## 五、当前主要问题');
@@ -131,12 +150,56 @@ function buildBrief(app, w) {
   else lines.push('- 暂无需关注的经营异常');
   lines.push('');
 
-  lines.push('## 六、需持续关注事项');
+  // 最新周度运营决议摘要
+  if (latestRes) {
+    lines.push('## 五、本周运营决议摘要');
+    lines.push('');
+    lines.push(`> 复盘周期：${latestRes.period || '—'} · 下期：${latestRes.next_period || '—'} · 阶段：${latestRes.phase || '粉丝积累期'}`);
+    lines.push('');
+    if (latestRes.last_week_acceptance?.available) {
+      lines.push(`**上周决议验收（${latestRes.last_week_acceptance.items?.length || 0} 条）**：`);
+      latestRes.last_week_acceptance.items?.forEach(it => {
+        lines.push(`- ${it.verdict}：${it.name}（${it.detail.slice(0, 80)}...）`);
+      });
+      lines.push('');
+    }
+    if (latestRes.resolutions?.length) {
+      lines.push(`**本期决议（${latestRes.resolutions.length} 条）**：`);
+      latestRes.resolutions.forEach(r => {
+        lines.push(`- ${r.no} ${r.name} [${r.category}] ${r.priority}：${r.action.slice(0, 60)}...`);
+      });
+      lines.push('');
+    }
+  }
+
+  // 最新内容计划摘要
+  if (latestPlan) {
+    lines.push('## 六、本周内容更新计划');
+    lines.push('');
+    lines.push(`> 执行周期：${latestPlan.for_period || '—'} · 核心方向：${latestPlan.plan?.coreDirection || '—'}`);
+    lines.push('');
+    if (latestPlan.plan?.schedule?.length) {
+      latestPlan.plan.schedule.forEach(s => {
+        lines.push(`- ${s.day}：${s.topic} — ${s.title.slice(0, 50)}... [决议：${s.resolutionRef}]`);
+      });
+      lines.push('');
+    }
+    lines.push(`> 发布时间：周二~周四 08:00-09:00 · 验证指标：发布 24h 阅读 ≥ 周均`);
+    lines.push('');
+  }
+
+  lines.push('## 七、当前主要问题');
+  lines.push('');
+  if (risks.length) risks.forEach(r => lines.push(`- [${r.level}] ${r.title}：${r.desc}`));
+  else lines.push('- 暂无需关注的经营异常');
+  lines.push('');
+
+  lines.push('## 八、需持续关注事项');
   lines.push('');
   data.followUps.forEach(s => lines.push(`- ${s}`));
   lines.push('');
 
-  lines.push('## 七、下一步工作重点');
+  lines.push('## 九、下一步工作重点');
   lines.push('');
   lines.push(`1. 内容日更：优先清空 ${o.pendingDrafts ?? 0} 篇待发布草稿`);
   lines.push(`2. 粉丝增长：引导关注互动话术 + 朋友圈/社群转发`);

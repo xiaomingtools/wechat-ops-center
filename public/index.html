@@ -393,8 +393,8 @@ function renderOverview(){
   const db=o.dataBrief||{};
   const kpi = (num,label,sub,cls='')=>`<div class="kpi"><div class="kpi-num ${cls}">${num}</div><div class="kpi-label">${label}</div><div class="kpi-sub">${sub||''}</div></div>`;
   // 数据状态徽章映射
-  const stMap={'今日已更新':['b-ok'],'数据无变化':['b-ok'],'正在采集':['b-info'],'等待更新':['b-mute'],'采集失败':['b-crit'],'同步失败':['b-crit'],'登录状态过期':['b-warn'],'数据已过期':['b-warn'],'状态未知':['b-mute']};
-  const stb=stMap[db.dataStatus]||stMap['状态未知'];
+  const stMap={'今日完整更新':['b-ok'],'部分数据已更新':['b-info'],'等待更新':['b-mute'],'采集失败':['b-crit'],'同步失败':['b-crit'],'登录状态过期':['b-warn'],'数据已过期':['b-warn'],'状态未知':['b-mute']};
+  const stb=stMap[db.overallStatus]||stMap['状态未知'];
   const latestBrief=D.latestDailyBrief||null;
   const latestRes=D.latestResolution||null;
   const latestPlan=D.latestContentPlan||null;
@@ -402,14 +402,22 @@ function renderOverview(){
   let html=`
   ${card('经营总览','数据截至 '+(o.latestCheck?fmtDt(o.latestCheck):'—')+ (o.dataFreshness==='过期'?` · <span class="badge b-warn">已过期</span>`:''))}
 
-  ${card('数据更新状态','看板只查看 · 由 WorkBuddy 自动采集与同步', `<span class="badge ${stb[0]}">${esc(db.dataStatus||'状态未知')}</span>`)}
+  ${card('数据更新状态','看板只查看 · 由 WorkBuddy 自动采集与同步', `<span class="badge ${stb[0]}">${esc(db.overallStatus||'状态未知')}</span>`)}
   <div class="grid4" style="margin-bottom:6px">
-    <div class="kpi"><div class="kpi-num ${db.dataStatus==='今日已更新'?'ok':''}" style="font-size:18px">${esc(db.latestDataDate||'--')}</div><div class="kpi-label">最新数据日期</div></div>
-    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.lastSuccessfulCollectAt?fmtDt(db.lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">最近成功采集</div></div>
-    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.lastCloudSyncAt?fmtDt(db.lastCloudSyncAt):'--'}</div><div class="kpi-label">最近云端同步</div></div>
+    <div class="kpi"><div class="kpi-num ${db.overallStatus==='今日完整更新'?'ok':db.overallStatus==='部分数据已更新'?'info':''}" style="font-size:18px">${esc(db.latestDataDate||'--')}</div><div class="kpi-label">最新数据日期</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.categories && db.categories.find(c=>c.category==='粉丝数据')?.lastSuccessfulCollectAt?fmtDt(db.categories.find(c=>c.category==='粉丝数据').lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">粉丝最近成功</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.categories && db.categories.find(c=>c.category==='阅读数据')?.lastSuccessfulCollectAt?fmtDt(db.categories.find(c=>c.category==='阅读数据').lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">阅读最近成功</div></div>
     <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.nextPlannedUpdate?fmtDt(db.nextPlannedUpdate):'--'}</div><div class="kpi-label">下次计划更新</div></div>
   </div>
-  <div class="note">最近采集 ${db.lastCollectAt?fmtDt(db.lastCollectAt):'--'} · 系统检查 ${db.lastSystemCheckAt?fmtDt(db.lastSystemCheckAt):'--'}${db.collectFailureReason?` · <span style="color:var(--crit)">失败原因：${esc(db.collectFailureReason)}</span>`:''}。业务无变化时仍刷新最近成功检查时间，不因数据未变而长期显示未更新。</div>
+  ${db.categories && db.categories.length ? `
+  <div class="card-h" style="margin:10px 0 6px">各数据类别采集状态</div>
+  <div class="grid2" style="margin-bottom:10px">
+    ${db.categories.map(c=>{
+      const st = c.isComplete ? 'b-ok' : (c.failureReason ? 'b-warn' : 'b-mute');
+      return `<div class="kpi"><div class="kpi-num ${st}" style="font-size:18px">${c.isComplete ? '✓' : '✗'}</div><div class="kpi-label">${esc(c.category)}</div><div class="kpi-sub">${esc(c.dataDate||'--')}${c.failureReason?' · '+esc(c.failureReason):c.isComplete?'已更新':'未完成'}</div></div>`;
+    }).join('')}
+  </div>` : ''}
+  <div class="note">最近系统检查 ${db.lastSystemCheckAt?fmtDt(db.lastSystemCheckAt):'--'}${db.collectFailureReason?` · <span style="color:var(--crit)">失败原因：${esc(db.collectFailureReason)}</span>`:''}。业务无变化时仍刷新检查时间，不因数据未变而长期显示未更新。</div>
 
   <div class="grid4" style="margin:14px 0">
     ${kpi(o.followers,'累计粉丝','目标 '+(o.followerTarget||100)+' · '+(o.followerPct||0)+'%', (o.followerPct<30?'crit':''))}
