@@ -3,769 +3,1052 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>经营指挥中心 · V3</title>
+<title>经营指挥中心 · V6</title>
 <style>
+/* ═══ 主题变量体系（统一在此管理，避免硬编码散落）═══ */
 :root{
-  /* ── 与 aitoolyan.com 完全一致的配色（从 globals.css 提取）── */
-  --brand:#1168b7;--brand-dark:#0e4f8c;
-  --cyan:#49b8a9;--gold:#e9a94b;--pink:#8db6d1;
-  --bg:#F7FAFC;--card:#FFFFFF;--border:#E2E8F0;
+  --brand:#1168b7;--brand-ink:#ffffff;
+  --bg:#F4F7FB;--card:#FFFFFF;--card2:#FBFCFE;--border:#E4E9F0;
   --title:#0E233A;--body:#415567;--sub:#5F7181;--dim:#94A3B8;
-  --grad:linear-gradient(135deg,#1168b7,#49b8a9);
-  --radius:14px;--shadow:0 1px 4px rgba(14,35,58,.06),0 4px 16px rgba(14,35,58,.04);
+  --ok:#16a34a;--warn:#d97706;--crit:#dc2626;--info:#2563eb;
+  --grad:linear-gradient(135deg,#1168b7,#0e9488);
+  --radius:14px;--shadow:0 1px 3px rgba(14,35,58,.06),0 6px 20px rgba(14,35,58,.05);
+  --c1:#1168b7;--c2:#0e9488;--c3:#d97706;--c4:#8b5cf6;--c5:#ef4444;
+}
+/* 深色：石墨 */
+html[data-theme="dark"]{
+  --brand:#5aa9ff;--brand-ink:#0b1220;
+  --bg:#0f1620;--card:#18222f;--card2:#141d29;--border:#2a3646;
+  --title:#e6edf5;--body:#aebccb;--sub:#8b9aab;--dim:#5d6c7d;
+  --ok:#4ade80;--warn:#fbbf24;--crit:#f87171;--info:#60a5fa;
+  --grad:linear-gradient(135deg,#3b82f6,#22d3ee);
+  --shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
+  --c1:#5aa9ff;--c2:#2dd4bf;--c3:#fbbf24;--c4:#a78bfa;--c5:#f87171;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--title);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;padding-bottom:80px}
+body{background:var(--bg);color:var(--title);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh;padding-bottom:78px;transition:background .3s,color .3s}
 
 /* ── topbar ── */
-.topbar{display:flex;justify-content:space-between;align-items:center;padding:10px 24px;font-size:12px;color:var(--sub);border-bottom:1px solid var(--border);background:rgba(255,255,255,.85);backdrop-filter:blur(10px);position:sticky;top:0;z-index:50}
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
-.dot.ok{background:var(--cyan);box-shadow:0 0 5px var(--cyan)}
-.dot.off{background:#ef4444;box-shadow:0 0 5px #ef4444}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:11px 20px;font-size:12px;color:var(--sub);border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:50;backdrop-filter:blur(10px)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.dot.off{background:var(--crit);box-shadow:0 0 6px var(--crit)}
+.dot.stale{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.topbar .r{display:flex;align-items:center;gap:12px}
+.stale-tip{font-size:11px;color:var(--warn);display:none}
+.stale-tip.show{display:inline}
 
 /* ── header ── */
-.header{padding:28px 24px 22px;background:linear-gradient(135deg,rgba(17,104,183,.08) 0%,rgba(73,184,169,.06) 100%);border-bottom:1px solid var(--border)}
-.header h1{font-size:24px;font-weight:800;color:var(--brand);letter-spacing:.5px}
-.header .tag{display:inline-block;background:var(--brand);color:white;font-size:10px;padding:2px 8px;border-radius:6px;margin-left:8px;font-weight:700;vertical-align:middle}
-.header .account{font-size:13px;color:var(--sub);margin-top:5px}
+.header{padding:20px 20px 14px}
+.header h1{font-size:20px;font-weight:800;color:var(--title);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.header .tag{display:inline-block;background:var(--grad);color:var(--brand-ink);font-size:10px;padding:2px 9px;border-radius:20px;margin-left:6px;font-weight:700}
+.header .sub{font-size:12px;color:var(--sub);margin-top:5px;display:flex;gap:10px;flex-wrap:wrap}
+.phase-chip{font-size:10px;padding:2px 8px;border-radius:12px;background:var(--card2);border:1px solid var(--border);color:var(--sub)}
+
+/* ── 模块标签栏 ── */
+.tabs{position:sticky;top:54px;z-index:49;display:flex;gap:6px;overflow-x:auto;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{display:flex;align-items:center;gap:5px;padding:8px 13px;border-radius:11px;font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;border:1px solid transparent;transition:all .2s}
+.tab svg{width:16px;height:16px}
+.tab:hover{color:var(--brand)}
+.tab.active{background:var(--brand);color:var(--brand-ink);box-shadow:0 3px 10px rgba(17,104,183,.25)}
+.tab .cnt{font-size:10px;background:var(--crit);color:#fff;padding:0 5px;border-radius:8px;font-weight:700}
 
 /* ── card ── */
-.card{margin:14px 20px;padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);position:relative;overflow:hidden}
-.card-title{font-size:12px;color:var(--brand);letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-weight:700;text-transform:uppercase}
-.card-title::before{content:'';width:3px;height:13px;background:var(--grad);border-radius:2px;flex-shrink:0}
-.badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
-.badge-ok{background:rgba(73,184,169,.15);color:#1a8a6e}
-.badge-warn{background:rgba(233,169,75,.15);color:#a06c08}
-.badge-danger{background:rgba(239,68,68,.12);color:#b91c1c}
-.badge-info{background:rgba(17,104,183,.12);color:var(--brand)}
+.page{display:none;padding:14px 16px 30px;max-width:1180px;margin:0 auto}.page.active{display:block}
+.card{margin-bottom:14px;padding:18px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-h{display:flex;align-items:center;gap:9px;margin-bottom:14px;font-size:13px;font-weight:800;color:var(--title)}
+.card-h::before{content:'';width:4px;height:15px;background:var(--grad);border-radius:2px}
+.card-h .hint{font-size:11px;color:var(--dim);font-weight:400;margin-left:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+/* 经营阶段进度轨 */
+.phase-track{display:flex;align-items:flex-start;gap:0;margin:6px 0}
+.phase-node{flex:1;text-align:center;position:relative;font-size:11px;color:var(--dim)}
+.phase-node i{display:block;width:14px;height:14px;border-radius:50%;background:var(--card2);border:2px solid var(--border);margin:0 auto 6px;position:relative;z-index:2}
+.phase-node::before{content:'';position:absolute;top:6px;left:50%;width:100%;height:2px;background:var(--border);z-index:1}
+.phase-node:first-child::before{display:none}
+.phase-node.on i{background:var(--brand);border-color:var(--brand);box-shadow:0 0 0 4px color-mix(in srgb,var(--brand) 20%,transparent)}
+.phase-node.on span{color:var(--title);font-weight:700}
+.phase-node.done i{background:var(--ok);border-color:var(--ok)}
+.phase-node.done span{color:var(--ok)}
+.phase-node.done::before,.phase-node.on::before{background:var(--ok)}
+@media(max-width:768px){.grid2{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}.phase-track{flex-wrap:wrap}.phase-node{flex:0 0 33.33%}}
 
-/* ── KPI grid ── */
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 20px}
-@media(max-width:640px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
-.kpi{padding:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);position:relative;overflow:hidden}
-.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad)}
-.kpi-num{font-size:30px;font-weight:800;line-height:1}
-.kpi-sm{font-size:22px;font-weight:700;line-height:1}
-.kpi-label{font-size:12px;color:var(--sub);margin-top:8px;font-weight:500}
+/* ── KPI ── */
+.kpi{padding:15px;background:var(--card2);border:1px solid var(--border);border-radius:12px;position:relative;overflow:hidden}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad);opacity:.9}
+.kpi-num{font-size:26px;font-weight:800;line-height:1;color:var(--title)}
+.kpi-num.warn{color:var(--warn)}.kpi-num.crit{color:var(--crit)}.kpi-num.ok{color:var(--ok)}.kpi-num.muted{color:var(--dim);font-size:18px}
+.kpi-label{font-size:12px;color:var(--sub);margin-top:8px}
 .kpi-sub{font-size:11px;color:var(--dim);margin-top:3px}
 
-/* ── follower section ── */
-.follow-section{margin:14px 20px;padding:20px;background:linear-gradient(135deg,rgba(17,104,183,.08),rgba(73,184,169,.06));border:1px solid rgba(17,104,183,.18);border-radius:var(--radius);box-shadow:var(--shadow);position:relative;overflow:hidden}
-.follow-section::before{content:'';position:absolute;top:-30px;right:-30px;width:100px;height:100px;border-radius:50%;background:rgba(17,104,183,.06)}
-.f-count{font-size:44px;font-weight:800;color:var(--brand);line-height:1}
-.f-target{font-size:13px;color:var(--sub);margin-top:4px}
-.prog-track{height:10px;background:#E2E8F0;border-radius:5px;margin-top:14px;overflow:hidden}
-.prog-fill{height:100%;background:var(--grad);border-radius:5px;transition:width 1s cubic-bezier(.4,0,.2,1)}
-.f-meta{display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--sub)}
-.tag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:8px;font-size:11px;font-weight:600}
-.tag-web{background:rgba(73,184,169,.15);color:#1a8a6e}
-.tag-draft{background:rgba(17,104,183,.12);color:var(--brand)}
-.tag-cat{background:rgba(233,169,75,.12);color:#a06c08}
+/* ── badge / state ── */
+.badge{font-size:10.5px;padding:2px 9px;border-radius:11px;font-weight:600;display:inline-block}
+.b-ok{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.b-warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.b-crit{background:color-mix(in srgb,var(--crit) 14%,transparent);color:var(--crit)}
+.b-info{background:color-mix(in srgb,var(--info) 15%,transparent);color:var(--info)}
+.b-mute{background:var(--card2);border:1px solid var(--border);color:var(--dim)}
+.b-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
 
-/* ── canvas chart ── */
-.chart-wrap{position:relative;margin:4px 0}
-canvas{width:100%!important;height:190px!important;display:block}
-.chart-labels{display:flex;justify-content:space-around;margin-top:6px;font-size:10px;color:var(--dim)}
-
-/* ── two-col ── */
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0 20px}
-@media(max-width:768px){.two-col{grid-template-columns:1fr}}
-
-/* ── list item ── */
-.item{padding:11px 14px;background:rgba(247,250,252,.8);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
-.item:hover{border-color:rgba(17,104,183,.2)}
-.item-date{font-size:11px;color:var(--dim);margin-bottom:3px}
-.item-title{font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--title)}
-.item-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+/* ── progress ── */
+.prog{height:10px;background:var(--border);border-radius:6px;overflow:hidden;margin:8px 0}
+.prog>i{display:block;height:100%;background:var(--grad);border-radius:6px;transition:width 1s cubic-bezier(.4,0,.2,1)}
 
 /* ── table ── */
 .tbl-wrap{overflow-x:auto;margin:0 -4px}
-.data-table{width:100%;border-collapse:collapse;font-size:12px;min-width:500px}
-.data-table th{text-align:left;padding:10px 12px;color:var(--brand);font-weight:700;border-bottom:2px solid var(--border);font-size:11px;letter-spacing:.5px}
-.data-table td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle;color:var(--body)}
-.data-table tr:hover td{background:rgba(17,104,183,.03)}
-.tbl-link{color:var(--brand);text-decoration:none;font-size:11px;font-weight:600}
-.tbl-link:hover{text-decoration:underline}
-.badge-sm{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600}
-.badge-pub{background:rgba(73,184,169,.15);color:#1a8a6e}
-.badge-pend{background:rgba(233,169,75,.15);color:#a06c08}
-.badge-fail{background:rgba(239,68,68,.12);color:#b91c1c}
+.t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:460px}
+.t th{text-align:left;padding:9px 11px;color:var(--sub);font-weight:700;border-bottom:2px solid var(--border);font-size:11px;white-space:nowrap}
+.t td{padding:9px 11px;border-bottom:1px solid var(--border);color:var(--body);vertical-align:middle}
+.t tr:hover td{background:color-mix(in srgb,var(--brand) 4%,transparent)}
+.st{font-size:10.5px;padding:2px 7px;border-radius:6px;font-weight:600}
+.st-pass{background:color-mix(in srgb,var(--ok)16%,transparent);color:var(--ok)}
+.st-pending{background:color-mix(in srgb,var(--info)15%,transparent);color:var(--info)}
+.st-fail{background:color-mix(in srgb,var(--crit)14%,transparent);color:var(--crit)}
+.st-block{background:color-mix(in srgb,var(--warn)18%,transparent);color:var(--warn)}
+.st-mute{background:var(--card2);color:var(--dim)}
 
-/* ── search & filter ── */
-.search-box{margin:12px 20px;position:relative}
-.search-box input{width:100%;padding:11px 14px 11px 38px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--title);font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;box-shadow:0 1px 3px rgba(14,35,58,.04)}
-.search-box input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(17,104,183,.1)}
-.search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dim);width:18px;height:18px}
-.filter-row{display:flex;gap:8px;padding:0 20px 12px;flex-wrap:wrap}
-.filter-select{padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;color:var(--body);font-size:12px;outline:none;cursor:pointer}
-.filter-select:focus{border-color:var(--brand)}
+/* ── empty / list ── */
+.empty{text-align:center;padding:30px 10px;color:var(--dim);font-size:13px}
+.empty svg{width:40px;height:40px;opacity:.4;margin-bottom:10px}
+.li{padding:11px 13px;background:var(--card2);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+.li-t{font-size:13px;font-weight:600;color:var(--title);line-height:1.4}
+.li-m{font-size:11px;color:var(--dim);margin-top:3px}
 
-/* ── kanban ── */
-.kanban-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:12px 20px}
-.k-col{background:#F7FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:12px;min-height:140px}
-.k-header{font-size:12px;font-weight:700;color:var(--brand);margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--border);display:flex;justify-content:space-between;align-items:center}
-.k-count{background:var(--brand);color:white;padding:1px 7px;border-radius:8px;font-size:11px}
-.k-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:all .2s;box-shadow:0 1px 3px rgba(14,35,58,.04)}
-.k-card:hover{border-color:var(--brand);transform:translateY(-2px);box-shadow:0 4px 12px rgba(14,35,58,.1)}
-.k-title{font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.4;color:var(--title)}
-.k-meta{font-size:11px;color:var(--sub);display:flex;justify-content:space-between}
+/* ── risk / diag ── */
+.risk{padding:12px 14px;background:var(--card2);border:1px solid var(--border);border-radius:10px;margin-bottom:9px;border-left:4px solid var(--dim)}
+.risk.critical{border-left-color:var(--crit)}
+.risk.warning{border-left-color:var(--warn)}
+.risk.info{border-left-color:var(--info)}
+.risk-t{font-size:13px;font-weight:700;color:var(--title);display:flex;align-items:center;gap:7px}
+.risk-m{font-size:12px;color:var(--body);margin-top:4px;line-height:1.55}
+.risk-s{font-size:11px;color:var(--dim);margin-top:5px}
 
-/* ── diag cards ── */
-.diag-card{padding:13px 15px;background:#F7FAFC;border:1px solid var(--border);border-radius:10px;margin-bottom:10px;border-left:4px solid var(--dim)}
-.diag-card.critical{border-left-color:#ef4444;background:rgba(239,68,68,.04)}
-.diag-card.warning{border-left-color:var(--gold);background:rgba(233,169,75,.04)}
-.diag-card.info{border-left-color:var(--brand);background:rgba(17,104,183,.04)}
-.diag-title{font-size:13px;font-weight:700;margin-bottom:4px;color:var(--title)}
-.diag-msg{font-size:12px;color:var(--body);line-height:1.6}
-.diag-action{font-size:11px;color:var(--brand);margin-top:6px;cursor:pointer;font-weight:600}
+/* ── chart ── */
+canvas{width:100%!important;height:180px!important;display:block}
+.chl{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-top:5px}
 
-/* ── strategy cards ── */
-.strat-card{padding:12px 14px;background:rgba(17,104,183,.04);border:1px solid rgba(17,104,183,.12);border-radius:10px;margin-bottom:8px}
-.strat-title{font-size:13px;font-weight:700;color:var(--brand);margin-bottom:4px}
-.strat-desc{font-size:12px;color:var(--body);line-height:1.6}
+/* ── timeline ── */
+.tl{position:relative;padding-left:20px}
+.tl::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.tl-i{position:relative;margin-bottom:14px;padding-left:12px}
+.tl-i::before{content:'';position:absolute;left:-18px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--brand);border:3px solid var(--card)}
+.tl-i.milestone::before{background:var(--warn)}.tl-i.incident::before{background:var(--crit)}.tl-i.growth::before{background:var(--ok)}.tl-i.data::before{background:var(--c2)}.tl-i.report::before{background:var(--c4)}
+.tl-d{font-size:11px;color:var(--dim);font-weight:700}
+.tl-t{font-size:13px;color:var(--title);margin-top:2px;font-weight:600}
 
-/* ── top article row ── */
-.art-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
-.art-row:last-child{border-bottom:none}
-.art-rank{width:24px;height:24px;border-radius:7px;background:#E2E8F0;color:var(--sub);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.art-rank.r1{background:rgba(233,169,75,.2);color:#a06c08}
-.art-rank.r2{background:rgba(17,104,183,.15);color:var(--brand)}
-.art-rank.r3{background:rgba(73,184,169,.15);color:#1a8a6e}
-.art-info{flex:1;min-width:0}
-.art-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--title)}
-.art-meta{font-size:11px;color:var(--dim);margin-top:2px}
-.art-reads{font-size:17px;font-weight:800;color:var(--brand);flex-shrink:0}
+/* ── search ── */
+.search{width:100%;padding:10px 13px;background:var(--card2);border:1px solid var(--border);border-radius:10px;color:var(--title);font-size:13.5px;outline:none;margin-bottom:10px}
+.search:focus{border-color:var(--brand)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{padding:6px 11px;border-radius:18px;font-size:12px;font-weight:600;background:var(--card2);border:1px solid var(--border);color:var(--sub);cursor:pointer}
+.chip.on{background:var(--brand);color:var(--brand-ink);border-color:transparent}
 
-/* ── bottom nav ── */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.95);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 0;padding-bottom:max(8px,env(safe-area-inset-bottom));backdrop-filter:blur(10px);z-index:50;box-shadow:0 -2px 10px rgba(14,35,58,.06)}
-.nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--dim);cursor:pointer;padding:4px 10px;border-radius:8px;transition:all .2s}
-.nav-item.active{color:var(--brand);background:rgba(17,104,183,.08)}
-.nav-item svg{width:20px;height:20px}
+/* ── theme panel ── */
+.tg{display:flex;gap:8px;flex-wrap:wrap}
+.tg button{padding:9px 13px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--body);font-size:12.5px;font-weight:600;cursor:pointer}
+.tg button.on{border-color:var(--brand);color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand)20%,transparent)}
+.preset{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+@media(max-width:640px){.preset{grid-template-columns:repeat(3,1fr)}}
+.preset button{text-align:left;padding:10px;border-radius:10px;border:2px solid var(--border);background:var(--card2);cursor:pointer;font-size:11px;font-weight:600}
+.preset button.on{border-color:var(--brand)}
+.preset .sw{display:flex;height:22px;border-radius:5px;overflow:hidden;margin-bottom:6px;border:1px solid var(--border)}
+.preset .sw i{flex:1}
+.colorrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.colorrow:last-child{border-bottom:none}
+.colorrow label{flex:1;font-size:12.5px;color:var(--body)}
+.colorrow input[type=color]{width:34px;height:34px;border:2px solid var(--border);border-radius:8px;cursor:pointer;background:none;padding:0}
+.colorrow .hex{font-size:11px;color:var(--dim);font-family:monospace;width:66px}
 
-/* ── refresh btn ── */
-.refresh-btn{position:fixed;bottom:80px;right:20px;width:46px;height:46px;border-radius:23px;background:var(--grad);border:none;color:white;font-size:18px;cursor:pointer;box-shadow:0 4px 14px rgba(17,104,183,.3);display:flex;align-items:center;justify-content:center;z-index:60;transition:transform .2s}
-.refresh-btn:active{transform:scale(.93)}
-.refresh-btn.spinning svg{animation:spin .7s linear infinite}
-@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-
-/* ── pages ── */
-.page{display:none}.page.active{display:block}
-
-/* ── tabs ── */
-.page-tabs{display:flex;gap:6px;padding:12px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.page-tabs::-webkit-scrollbar{display:none}
-.tab-btn{padding:7px 14px;border-radius:18px;font-size:12px;font-weight:600;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;white-space:nowrap;transition:all .2s}
-.tab-btn.active{background:var(--grad);color:white;border-color:transparent}
-
-/* ── modal ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(14,35,58,.35);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
-.modal-overlay.show{display:flex}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:400px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(14,35,58,.15)}
-.modal h3{font-size:17px;margin-bottom:16px;color:var(--brand);font-weight:800}
-.modal label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px;margin-top:12px;font-weight:600}
-.modal input,.modal select{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--title);font-size:14px;outline:none}
-.modal input:focus,.modal select:focus{border-color:var(--brand)}
-.modal-actions{display:flex;gap:10px;margin-top:20px}
-.modal-actions button{flex:1;padding:11px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:none}
-.btn-primary{background:var(--grad);color:white}
-.btn-secondary{background:var(--bg);color:var(--sub);border:1px solid var(--border)!important}
-
-/* ── empty / loading ── */
-.empty{text-align:center;padding:36px 20px;color:var(--dim)}
-.empty p{font-size:13px}
-.loading{text-align:center;padding:24px;color:var(--sub)}
-
-/* ── asset grid ── */
-.asset-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
-.asset-cell{padding:8px 4px;background:#F7FAFC;border:1px solid var(--border);border-radius:6px;font-size:10px;color:var(--sub);text-align:center;word-break:break-all;line-height:1.3}
-.asset-cell.ok{border-color:rgba(73,184,169,.5);color:#1a8a6e;background:rgba(73,184,169,.06)}
-.asset-cell.miss{border-color:rgba(239,68,68,.25);color:#b91c1c;opacity:.7}
-
-/* ── annual plan timeline ── */
-.plan-timeline{position:relative;padding-left:24px;margin-top:8px}
-.plan-timeline::before{content:'';position:absolute;left:8px;top:4px;bottom:4px;width:2px;background:var(--border)}
-.plan-item{position:relative;margin-bottom:14px;padding-left:12px}
-.plan-item::before{content:'';position:absolute;left:-20px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--brand);border:2px solid white;box-shadow:0 0 0 2px rgba(17,104,183,.2)}
-.plan-item.done::before{background:#1a8a6e;box-shadow:0 0 0 2px rgba(26,138,110,.2)}
-.plan-item.active::before{background:var(--gold);box-shadow:0 0 0 2px rgba(233,169,75,.3);animation:pulse-dot 2s infinite}
-@keyframes pulse-dot{0%,100%{box-shadow:0 0 0 2px rgba(233,169,75,.3)}50%{box-shadow:0 0 0 5px rgba(233,169,75,.1)}}
-.plan-date{font-size:11px;color:var(--dim);font-weight:600}
-.plan-text{font-size:13px;color:var(--title);font-weight:600;margin-top:2px}
-.plan-note{font-size:11px;color:var(--sub);margin-top:2px}
-
-/* ── channel bar ── */
-.ch-bar{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px}
-.ch-name{width:64px;color:var(--body);font-weight:500;flex-shrink:0}
-.ch-track{flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden}
-.ch-fill{height:100%;background:var(--grad);border-radius:4px;transition:width .8s ease}
-.ch-val{width:44px;text-align:right;color:var(--dim);font-size:11px;flex-shrink:0}
-
-.last-updated{text-align:center;font-size:11px;color:var(--dim);padding:12px}
+/* ── misc ── */
+.muted{color:var(--dim);font-size:12px}
+.note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:12px;background:var(--card2);border:1px solid var(--border);color:var(--sub)}
+.refresh{position:fixed;bottom:70px;right:16px;width:46px;height:46px;border-radius:50%;background:var(--grad);border:none;color:var(--brand-ink);cursor:pointer;box-shadow:0 6px 18px rgba(17,104,183,.35);display:flex;align-items:center;justify-content:center;z-index:60}
+.refresh.spinning svg{animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.section-note{font-size:11px;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+@media(max-width:640px){.header h1{font-size:17px}.kpi-num{font-size:22px}}
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <span><span class="dot ok" id="connDot"></span><span id="connText">连接中...</span></span>
-  <span id="clockDisplay">--:--</span>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="connDot" class="dot off"></span><span id="connText">连接中…</span>
+    <span id="staleTip" class="stale-tip">数据已过期，请重新采集</span>
+  </div>
+  <div class="r">
+    <span class="phase-chip">V6.0 经营监督与决议追踪中心</span>
+    <span id="clockDisplay" style="font-weight:700;color:var(--title)">--:--</span>
+  </div>
 </div>
 
 <div class="header">
-  <h1>经营指挥中心 <span class="tag">V3 PRO</span></h1>
-  <div class="account" id="accountName">AI工具研究所 · 内容运营中心</div>
-</div>
-
-<!-- ═══ OVERVIEW ═══ -->
-<div class="page active" id="page-overview">
-  <!-- KPI row -->
-  <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-num cyan" style="color:var(--brand)" id="kpiFollowers">--</div><div class="kpi-label">粉丝数</div><div class="kpi-sub">目标 100 人</div></div>
-    <div class="kpi"><div class="kpi-num" style="color:#1a8a6e" id="kpiPublished">--</div><div class="kpi-label">已发布</div><div class="kpi-sub">篇公众号文章</div></div>
-    <div class="kpi"><div class="kpi-num" style="color:var(--brand)" id="kpiPassRate">--%</div><div class="kpi-label">通关率</div><div class="kpi-sub">Web+Draft双通</div></div>
-    <div class="kpi"><div class="kpi-sm" style="color:var(--gold)" id="kpiReads">--</div><div class="kpi-label">昨日阅读</div><div class="kpi-sub" id="kpiReadsChange"></div></div>
-  </div>
-
-  <!-- follower progress -->
-  <div class="follow-section">
-    <div style="font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600">📊 关注成长追踪</div>
-    <div class="f-count" id="followerBig">--</div>
-    <div class="f-target">当前粉丝 · 目标 <span id="followerTarget">100</span> 人 · 差距 <span id="followerGap">--</span> 人</div>
-    <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
-    <div class="f-meta">
-      <span id="followerPctLabel">进度 0%</span>
-      <span id="loginBadge" class="tag tag-draft">● 微信登录正常</span>
-      <span id="checkTime" style="color:var(--dim);font-size:11px">更新于 --</span>
-    </div>
-  </div>
-
-  <!-- reading trend chart -->
-  <div class="card">
-    <div class="card-title">📈 近7日阅读量趋势 <span class="badge badge-info" style="margin-left:auto">数据来源：创作者周报</span></div>
-    <div class="chart-wrap"><canvas id="readChart"></canvas></div>
-    <div class="chart-labels" id="readLabels"></div>
-  </div>
-
-  <!-- two-col: diagnostics + user growth -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">⚡ AI诊断报告 <span class="badge badge-danger" id="diagCount">0项</span></div>
-      <div id="diagList"><div class="loading">分析中...</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">👥 用户增长趋势（近14日）</div>
-      <div class="chart-wrap"><canvas id="userChart"></canvas></div>
-      <div class="chart-labels" id="userLabels"></div>
-    </div>
-  </div>
-
-  <!-- strategies + top articles -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">💡 内容策略建议</div>
-      <div id="stratList"><div class="loading">生成中...</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🏆 30天爆款 TOP10（来自微信后台）</div>
-      <div id="topArtList"><div class="loading">加载中...</div></div>
-    </div>
-  </div>
-
-  <!-- channel breakdown + year plan -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">🔀 本周流量渠道分布</div>
-      <div id="channelList"><div class="loading">加载中...</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🎯 年度运营计划与里程碑</div>
-      <div id="annualPlan"><div class="loading">计算中...</div></div>
-    </div>
-  </div>
-
-  <!-- week plan + recent posts -->
-  <div class="two-col">
-    <div class="card">
-      <div class="card-title">📅 本周计划</div>
-      <div id="weekPlan"><div class="loading">加载中</div></div>
-    </div>
-    <div class="card">
-      <div class="card-title">📤 最近发布记录</div>
-      <div id="recentPosts"><div class="loading">加载中</div></div>
-    </div>
-  </div>
-
-  <!-- alerts -->
-  <div class="card" id="alertCard" style="display:none;margin:14px 20px">
-    <div class="card-title" style="color:#ef4444">⚠ 异常告警 (<span id="alertCount">0</span>)</div>
-    <div id="alertList"></div>
-  </div>
-
-  <div class="last-updated" id="lastUpdated">最后更新: --</div>
-</div>
-
-<!-- ═══ TOPICS ═══ -->
-<div class="page" id="page-topics">
-  <div class="card">
-    <div class="card-title" style="justify-content:space-between">
-      <span>选题库</span>
-      <button onclick="showTopicModal()" style="background:var(--grad);border:none;color:white;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:700">+ 新建选题</button>
-    </div>
-    <div id="topicsList"><div class="loading">加载中...</div></div>
+  <h1>经营指挥中心 <span class="tag" id="verTag">V6</span></h1>
+  <div class="sub">
+    <span id="accountName">AI工具研究所 · 内容运营中心</span>
+    <span class="muted" id="lastUpdated"></span>
   </div>
 </div>
 
-<!-- ═══ KANBAN ═══ -->
-<div class="page" id="page-kanban">
-  <div class="kanban-board">
-    <div class="k-col"><div class="k-header">📋 规划中 <span class="k-count" id="cnt-plan">0</span></div><div id="col-plan"></div></div>
-    <div class="k-col"><div class="k-header">✍️ 写作中 <span class="k-count" id="cnt-write">0</span></div><div id="col-write"></div></div>
-    <div class="k-col"><div class="k-header">🔍 审核中 <span class="k-count" id="cnt-review">0</span></div><div id="col-review"></div></div>
-    <div class="k-col"><div class="k-header">✅ 已发布 <span class="k-count" id="cnt-pub">0</span></div><div id="col-pub"></div></div>
-  </div>
-</div>
+<div class="tabs" id="tabbar"></div>
 
-<!-- ═══ ARTICLES ═══ -->
-<div class="page" id="page-articles">
-  <div class="search-box">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="text" id="articleSearch" placeholder="搜索标题…" oninput="renderArticles(this.value)">
-  </div>
-  <div class="filter-row">
-    <select class="filter-select" id="catFilter" onchange="renderArticles(document.getElementById('articleSearch').value)">
-      <option value="">全部分类</option>
-      <option value="ai-discovery">AI发现</option><option value="ai-office">AI办公</option>
-      <option value="ai-creative">AI创意</option><option value="computer">电脑软件</option>
-      <option value="software">软件工具</option><option value="image-video">图像视频</option>
-      <option value="file-pdf">文件PDF</option><option value="comparison">横评对比</option>
-      <option value="project-case">案例项目</option><option value="other">其他</option>
-    </select>
-  </div>
-  <div class="card" style="margin-top:0">
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr><th>日期</th><th>标题</th><th>分类</th><th>网站</th><th>草稿</th><th>PV/阅读</th><th>分享</th><th>链接</th></tr></thead>
-        <tbody id="articlesBody"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
+<!-- ═══ 1 经营总览 ═══ -->
+<div class="page" id="page-overview"></div>
+<!-- ═══ 2 经营数据 ═══ -->
+<div class="page" id="page-data"></div>
+<!-- ═══ 3 内容资产 ═══ -->
+<div class="page" id="page-content"></div>
+<!-- ═══ 4 工作监督 ═══ -->
+<div class="page" id="page-work"></div>
+<!-- ═══ 5 盈利管理 ═══ -->
+<div class="page" id="page-revenue"></div>
+<!-- ═══ 6 策略与复盘 ═══ -->
+<div class="page" id="page-strategy"></div>
+<!-- ═══ 6b 运营决议与内容计划 ═══ -->
+<div class="page" id="page-resolution"></div>
+<!-- ═══ 6c 每日简报 ═══ -->
+<div class="page" id="page-brief"></div>
+<!-- ═══ V6 经营日历 ═══ -->
+<div class="page" id="page-calendar"></div>
+<!-- ═══ V6 经营实验与经验沉淀 ═══ -->
+<div class="page" id="page-experiment"></div>
+<!-- ═══ 7 经营档案 ═══ -->
+<div class="page" id="page-archive"></div>
+<!-- ═══ 7b 数据更新记录 ═══ -->
+<div class="page" id="page-update"></div>
+<!-- ═══ 8 系统监控 ═══ -->
+<div class="page" id="page-system"></div>
+<!-- ═══ 9 外观设置 ═══ -->
+<div class="page" id="page-theme"></div>
 
-<!-- ═══ DRAFTS ═══ -->
-<div class="page" id="page-drafts">
-  <div class="card">
-    <div class="card-title">待发布草稿 (<span id="draftCount">0</span>)</div>
-    <div id="draftsList"><div class="loading">加载中...</div></div>
-  </div>
-  <div class="card">
-    <div class="card-title">九宫格资产检查（标准模板）</div>
-    <div id="assetGrid"><div class="loading">加载中...</div></div>
-    <div style="font-size:11px;color:var(--dim);margin-top:10px">news_cover · body_01 · body_02 · toolbox_footer · newspic_cover · pic_02~04</div>
-  </div>
-</div>
-
-<!-- ═══ PUBLISH ═══ -->
-<div class="page" id="page-publish">
-  <div class="page-tabs">
-    <button class="tab-btn active" onclick="switchPubTab('history',this)">发布记录</button>
-    <button class="tab-btn" onclick="switchPubTab('stats',this)">分类统计</button>
-    <button class="tab-btn" onclick="switchPubTab('alerts',this)">历史告警</button>
-  </div>
-  <div id="pubHistoryPanel" class="card" style="margin-top:0">
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr><th>日期</th><th>标题</th><th>guide_id</th><th>网站</th><th>草稿</th><th>图片数</th></tr></thead>
-        <tbody id="pubBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <div id="pubStatsPanel" class="card" style="margin-top:0;display:none">
-    <div class="tbl-wrap">
-      <table class="data-table">
-        <thead><tr><th>分类</th><th>总数</th><th>已发布</th><th>完成率</th></tr></thead>
-        <tbody id="statsBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <div id="pubAlertsPanel" class="card" style="margin-top:0;display:none">
-    <div id="alertsBody"></div>
-  </div>
-</div>
-
-<button class="refresh-btn" id="refreshBtn" onclick="fetchData()">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+<button class="refresh" id="refreshBtn" title="刷新数据">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
 </button>
 
-<div class="bottom-nav">
-  <div class="nav-item active" data-page="overview">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-    <span>总览</span>
-  </div>
-  <div class="nav-item" data-page="topics">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-    <span>选题</span>
-  </div>
-  <div class="nav-item" data-page="kanban">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    <span>看板</span>
-  </div>
-  <div class="nav-item" data-page="articles">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-    <span>文章</span>
-  </div>
-  <div class="nav-item" data-page="drafts">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-    <span>草稿</span>
-  </div>
-  <div class="nav-item" data-page="publish">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9z"/></svg>
-    <span>复盘</span>
-  </div>
-</div>
+<script>
+/* ═══════════════════════════════════════════════════════
+   主题系统：CSS 变量 + data-theme + localStorage 持久化
+   ═══════════════════════════════════════════════════════ */
+const THEME_KEY = 'v5_ops_theme';
+const PRESETS = {
+  '极简白':   { brand:'#1168b7', bg:'#F4F7FB', card:'#FFFFFF', ink:'#ffffff' },
+  '商务深蓝': { brand:'#1e50a0', bg:'#0d1a2b', card:'#152a44', ink:'#ffffff' },
+  '深色石墨': { brand:'#5aa9ff', bg:'#0f1620', card:'#18222f', ink:'#0b1220' },
+  '科技蓝':   { brand:'#2563eb', bg:'#eef4ff', card:'#ffffff', ink:'#ffffff' },
+  '柔和灰':   { brand:'#64748b', bg:'#eef1f4', card:'#ffffff', ink:'#ffffff' },
+};
+// 文本对比色：根据背景亮度自动选深/浅，保证可读（满足 8.5）
+function luma(hex){ hex=hex.replace('#',''); if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');
+  const r=parseInt(hex.substr(0,2),16),g=parseInt(hex.substr(2,2),16),b=parseInt(hex.substr(4,2),16);
+  return (0.299*r+0.587*g+0.114*b)/255; }
+function bestText(bg){ return luma(bg) > 0.6 ? '#0E233A' : '#e6edf5'; }
 
-<div class="modal-overlay" id="topicModal">
-  <div class="modal">
-    <h3 id="modalTitle">新建选题</h3>
-    <label>选题标题</label>
-    <input type="text" id="topicInput" placeholder="输入选题标题…">
-    <label>分类</label>
-    <select id="topicCat">
-      <option value="ai-discovery">AI发现</option><option value="ai-office">AI办公</option>
-      <option value="ai-creative">AI创意</option><option value="computer">电脑软件</option>
-      <option value="software">软件工具</option><option value="image-video">图像视频</option>
-      <option value="file-pdf">文件PDF</option><option value="comparison">横评对比</option>
-      <option value="project-case">案例项目</option><option value="other">其他</option>
-    </select>
-    <label>状态</label>
-    <select id="topicStatus">
-      <option value="planning">规划中</option><option value="writing">写作中</option>
-      <option value="review">审核中</option><option value="done">已完成</option>
-    </select>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeTopicModal()">取消</button>
-      <button class="btn-primary" onclick="saveTopic()">保存</button>
+function applyPreset(name){
+  const p = PRESETS[name]; if(!p) return;
+  const t = document.documentElement;
+  const light = luma(p.bg) > 0.6;
+  t.style.setProperty('--brand', p.brand);
+  t.style.setProperty('--bg', p.bg);
+  t.style.setProperty('--card', p.card);
+  t.style.setProperty('--card2', light ? '#FBFCFE' : p.card);
+  t.style.setProperty('--title', bestText(p.bg));
+  t.style.setProperty('--body', light ? '#415567' : '#aebccb');
+  t.style.setProperty('--sub',  light ? '#5F7181' : '#8b9aab');
+  t.style.setProperty('--dim',  light ? '#94A3B8' : '#5d6c7d');
+  t.style.setProperty('--border', light ? '#E4E9F0' : '#2a3646');
+  t.style.setProperty('--brand-ink', p.ink);
+  t.style.setProperty('--grad', `linear-gradient(135deg,${p.brand},${light?'#0e9488':'#22d3ee'})`);
+  document.body.setAttribute('data-mode', light?'light':'dark');
+  saveTheme({mode:'custom', preset:name, custom:{}});
+  markPreset(name);
+}
+function customColor(field, val){
+  const t = document.documentElement;
+  const map = { pageBg:'--bg', card:'--card', nav:'--card', accent:'--brand' };
+  if(map[field]) t.style.setProperty(map[field], val);
+  // 联动文字对比
+  const curBg = getComputedStyle(t).getPropertyValue('--bg').trim() || '#F4F7FB';
+  t.style.setProperty('--title', bestText(val===curBg?curBg:val));
+  saveTheme({ mode:'custom', preset: null,
+    custom: { ...(getTheme().custom||{}), [field]:val } });
+  markPreset(null);
+}
+function getTheme(){ try{ return JSON.parse(localStorage.getItem(THEME_KEY))||{}; }catch(e){ return {}; } }
+function saveTheme(obj){ localStorage.setItem(THEME_KEY, JSON.stringify(obj)); }
+function modeToSystem(){ // 跟随系统
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  clearCustom(); applyThemeMode(dark?'dark':'light');
+}
+function clearCustom(){
+  const t=document.documentElement;
+  ['--brand','--bg','--card','--card2','--title','--body','--sub','--dim','--border','--brand-ink','--grad'].forEach(v=>t.style.removeProperty(v));
+}
+function applyThemeMode(mode){
+  document.documentElement.setAttribute('data-theme', mode==='dark'?'dark':'');
+  if(mode==='light') document.documentElement.removeAttribute('data-theme');
+  document.body.setAttribute('data-mode', mode);
+  saveTheme({ mode, preset:null, custom:getTheme().custom||{} });
+}
+function initTheme(){
+  const th = getTheme();
+  clearCustom();
+  if(th.custom){ Object.entries(th.custom).forEach(([k,v])=>{
+    const map={pageBg:'--bg',card:'--card',nav:'--card',accent:'--brand'};
+    if(map[k]) document.documentElement.style.setProperty(map[k],v); }); }
+  if(th.mode==='custom'||th.preset){ if(th.preset) applyPreset(th.preset); document.documentElement.setAttribute('data-theme',''); }
+  else if(th.mode==='dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+  else { document.documentElement.removeAttribute('data-theme'); }
+  document.body.setAttribute('data-mode', th.mode==='custom' ? (luma((th.custom.pageBg||'#F4F7FB'))>0.6?'light':'dark') : (th.mode==='dark'?'dark':'light'));
+  // 跟随系统监听
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e=>{ if((getTheme().mode||'light')==='auto') applyThemeMode(e.matches?'dark':'light'); });
+}
+
+/* ═══════════════════════════════════════════════════════
+   导航 + 数据加载 + 渲染
+   ═══════════════════════════════════════════════════════ */
+const API = '/api/data';
+const RAW_DATA = 'https://raw.githubusercontent.com/xiaomingtools/wechat-ops-center/main/data/appdata.json';
+let D = {};
+const I = {
+  ov:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  data:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  content:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  work:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+  revenue:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9h4a2 2 0 010 4H9M9 15h5"/></svg>',
+  strategy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>',
+  archive:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v4H4zM6 8v12h12V8M9 12h6"/></svg>',
+  brief:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/></svg>',
+  resolution:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>',
+  update:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>',
+  system:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>',
+  theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
+  experiment:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/></svg>',
+};
+const TABS = [
+  {id:'overview',name:'经营总览',icon:I.ov},
+  {id:'data',name:'经营数据',icon:I.data},
+  {id:'content',name:'内容资产',icon:I.content},
+  {id:'work',name:'工作监督',icon:I.work},
+  {id:'revenue',name:'盈利管理',icon:I.revenue},
+  {id:'strategy',name:'策略与复盘',icon:I.strategy},
+  {id:'resolution',name:'运营决议',icon:I.resolution},
+  {id:'brief',name:'每日简报',icon:I.brief},
+  {id:'calendar',name:'经营日历',icon:I.calendar},
+  {id:'experiment',name:'实验与经验',icon:I.experiment},
+  {id:'archive',name:'经营档案',icon:I.archive},
+  {id:'update',name:'数据更新记录',icon:I.update},
+  {id:'system',name:'系统监控',icon:I.system},
+  {id:'theme',name:'外观设置',icon:I.theme},
+];
+function buildTabs(){
+  const el=document.getElementById('tabbar');
+  el.innerHTML = TABS.map(t=>`<div class="tab" data-page="${t.id}" onclick="showPage('${t.id}')">${t.icon}<span>${t.name}</span></div>`).join('');
+}
+function showPage(id){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.page===id));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  // 按需渲染图表
+  if(id==='overview') drawTrend();
+  if(id==='data'){ drawUserChart(); drawChannelChart(); }
+  if(id==='theme') renderThemePanel();
+  document.getElementById('tabbar').scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+}
+function fmtDate(s){ if(!s)return'--'; return String(s).slice(5).replace(/-/g,'/'); }
+function fmtDt(iso){ if(!iso)return'--'; try{return new Date(iso).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return String(iso).slice(0,16);} }
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+function card(title,hint,body){ return `<div class="card"><div class="card-h">${esc(title)}${hint?`<span class="hint">${esc(hint)}</span>`:''}</div>${body}</div>`; }
+function emptyState(msg){ return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/></svg><div>${esc(msg)}</div></div>`; }
+
+async function loadJson(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url+' -> '+r.status); return r.json(); }
+async function fetchData(){
+  const btn=document.getElementById('refreshBtn'); btn.classList.add('spinning');
+  try{
+    try{ D = await loadJson(API); document.getElementById('connText').textContent='已连接'; }
+    catch(e){ D = await loadJson(RAW_DATA); document.getElementById('connText').textContent='已连接(云数据)'; }
+    document.getElementById('connDot').className='dot ok';
+    document.getElementById('staleTip').classList.toggle('show', D.overview?.dataFreshness==='过期');
+    renderAll();
+  }catch(e2){
+    document.getElementById('connDot').className='dot off';
+    document.getElementById('connText').textContent='连接失败，重试中…';
+  }finally{ setTimeout(()=>btn.classList.remove('spinning'),350); }
+}
+
+/* ── 状态徽章（数据真实性分级）── */
+function stateBadge(st){
+  const map={ real:['b-ok','真实'], zero_real:['b-ok','真实为0'], no_data:['b-mute','暂无'], not_connected:['b-warn','未接入'], stale:['b-warn','过期'], unknown:['b-mute','未知'], pending:['b-info','待同步'] };
+  const [cls,txt]=map[st]||map.unknown;
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+
+/* ═══ 1 经营总览 ═══ */
+function renderOverview(){
+  const o=D.overview||{};
+  const rev=D.revenue||{};
+  const db=o.dataBrief||{};
+  const kpi = (num,label,sub,cls='')=>`<div class="kpi"><div class="kpi-num ${cls}">${num}</div><div class="kpi-label">${label}</div><div class="kpi-sub">${sub||''}</div></div>`;
+  // 数据状态徽章映射
+  const stMap={'今日完整更新':['b-ok'],'部分数据已更新':['b-info'],'等待更新':['b-mute'],'采集失败':['b-crit'],'同步失败':['b-crit'],'登录状态过期':['b-warn'],'数据已过期':['b-warn'],'状态未知':['b-mute']};
+  const stb=stMap[db.overallStatus]||stMap['状态未知'];
+  const latestBrief=D.latestDailyBrief||null;
+  const latestRes=D.latestResolution||null;
+  const latestPlan=D.latestContentPlan||null;
+  const planCore=latestPlan?.plan?.coreDirection||latestPlan?.plan?.schedule?.[0]?.topic||'—';
+  let html=`
+  ${card('经营总览','数据截至 '+(o.latestCheck?fmtDt(o.latestCheck):'—')+ (o.dataFreshness==='过期'?` · <span class="badge b-warn">已过期</span>`:''))}
+
+  ${card('数据更新状态','看板只查看 · 由 WorkBuddy 自动采集与同步', `<span class="badge ${stb[0]}">${esc(db.overallStatus||'状态未知')}</span>`)}
+  <div class="grid4" style="margin-bottom:6px">
+    <div class="kpi"><div class="kpi-num ${db.overallStatus==='今日完整更新'?'ok':db.overallStatus==='部分数据已更新'?'info':''}" style="font-size:18px">${esc(db.latestDataDate||'--')}</div><div class="kpi-label">最新数据日期</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.categories && db.categories.find(c=>c.category==='粉丝数据')?.lastSuccessfulCollectAt?fmtDt(db.categories.find(c=>c.category==='粉丝数据').lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">粉丝最近成功</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.categories && db.categories.find(c=>c.category==='阅读数据')?.lastSuccessfulCollectAt?fmtDt(db.categories.find(c=>c.category==='阅读数据').lastSuccessfulCollectAt):'--'}</div><div class="kpi-label">阅读最近成功</div></div>
+    <div class="kpi"><div class="kpi-num" style="font-size:14px">${db.nextPlannedUpdate?fmtDt(db.nextPlannedUpdate):'--'}</div><div class="kpi-label">下次计划更新</div></div>
+  </div>
+  ${db.categories && db.categories.length ? `
+  <div class="card-h" style="margin:10px 0 6px">各数据类别采集状态</div>
+  <div class="grid2" style="margin-bottom:10px">
+    ${db.categories.map(c=>{
+      const st = c.isComplete ? 'b-ok' : (c.failureReason ? 'b-warn' : 'b-mute');
+      return `<div class="kpi"><div class="kpi-num ${st}" style="font-size:18px">${c.isComplete ? '✓' : '✗'}</div><div class="kpi-label">${esc(c.category)}</div><div class="kpi-sub">${esc(c.dataDate||'--')}${c.failureReason?' · '+esc(c.failureReason):c.isComplete?'已更新':'未完成'}</div></div>`;
+    }).join('')}
+  </div>` : ''}
+  <div class="note">最近系统检查 ${db.lastSystemCheckAt?fmtDt(db.lastSystemCheckAt):'--'}${db.collectFailureReason?` · <span style="color:var(--crit)">失败原因：${esc(db.collectFailureReason)}</span>`:''}。业务无变化时仍刷新检查时间，不因数据未变而长期显示未更新。</div>
+
+  <div class="grid4" style="margin:14px 0">
+    ${kpi(o.followers,'累计粉丝','目标 '+(o.followerTarget||100)+' · '+(o.followerPct||0)+'%', (o.followerPct<30?'crit':''))}
+    ${kpi(o.yesterdayReads>0?o.yesterdayReads:'--','昨日阅读','30天 '+(o.totalReaders30d||0), (o.yesterdayReads>0?'':'muted'))}
+    ${kpi(o.publishedCount,'已发布文章','共 '+(o.totalArticles||0)+' 篇', (o.passRate>=90?'ok':''))}
+    ${kpi(o.pendingDrafts,'待发布草稿','通关率 '+(o.passRate||0)+'%')}
+  </div>
+  <div class="card-h" style="margin-top:6px">粉丝目标进度</div>
+  <div class="prog"><i style="width:${o.followerPct||0}%"></i></div>
+  <div class="note">${o.followers||0} / ${o.followerTarget||100} · 还差 ${Math.max(0,(o.followerTarget||100)-(o.followers||0))}</div>
+
+  ${card('近7天粉丝逐日趋势', D.trendSource||'后台 user_analysis_daily')}
+  <div class="chart-wrap"><canvas id="trendChart"></canvas><div class="chl" id="trendLabels"></div></div>
+  <div class="note">真实数据源：${esc(D.trendSource||'后台逐日用户数据')}。后台未提供逐日"阅读"字段，此处展示真实可得的逐日粉丝累计值；不伪造阅读曲线。</div>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card-h" style="margin-bottom:10px">本周计划</div>
+    ${(D.thisWeekPlan?.today?`<div class="li"><div class="li-t">${esc(D.thisWeekPlan.today.title)}</div><div class="li-m">今日 · ${D.thisWeekPlan.today.status}</div></div>`:'<div class="empty">今日无计划</div>')}
+    ${D.thisWeekPlan?.tomorrow?`<div class="li"><div class="li-t">${esc(D.thisWeekPlan.tomorrow.title)}</div><div class="li-m">明日 · 待发布</div></div>`:''}
+    <div class="card-h" style="margin-bottom:10px">重要异常 ${o.alertCount?`<span class="badge b-crit">${o.alertCount}</span>`:''}</div>
+    ${(D.risks||[]).slice(0,3).map(r=>`<div class="li"><div class="li-t">${esc(r.title)} <span class="badge ${r.level==='critical'?'b-crit':r.level==='warning'?'b-warn':'b-info'}">${r.level}</span></div><div class="li-m">${esc(r.desc)}</div></div>`).join('') || emptyState('暂无异常')}
+  </div>
+
+  <div class="grid3" style="margin-top:14px">
+    <div class="card" style="margin:0"><div class="card-h">最新每日简报 ${latestBrief?`<span class="hint">${esc(latestBrief.date)}</span>`:''}</div>
+      ${latestBrief?`<div class="li-m" style="font-size:12px;line-height:1.7">数据状态 ${esc(latestBrief.dataStatus||'未知')} · 粉丝 ${esc(latestBrief.overview?.followers??'--')} · 30天读者 ${esc(latestBrief.overview?.totalReaders30d??'--')}<br>待发布 ${esc(latestBrief.overview?.pendingDrafts??'--')} 篇 · 通关率 ${esc(latestBrief.overview?.passRate??'--')}%</div><div class="note" style="margin-top:8px">完整简报见「每日简报」页</div>`:emptyState('暂无每日简报')}
+    </div>
+    <div class="card" style="margin:0"><div class="card-h">下周运营决议 ${latestRes?`<span class="hint">${esc(latestRes.period||latestRes.next_period||'')}</span>`:''}</div>
+      ${latestRes?`<div class="li-m" style="font-size:12px;line-height:1.7">${(latestRes.resolutions||[]).slice(0,3).map(r=>`· ${esc(r.name)}（${esc(r.category)}）`).join('<br>')||'—'}</div><div class="note" style="margin-top:8px">完整决议与上周验收见「运营决议」页</div>`:emptyState('暂无运营决议')}
+    </div>
+    <div class="card" style="margin:0"><div class="card-h">当前内容更新方向 ${latestPlan?`<span class="hint">${esc(latestPlan.for_period||'')}</span>`:''}</div>
+      ${latestPlan?`<div class="li-m" style="font-size:12px;line-height:1.7">核心：${esc(planCore)}<br>本周计划 ${(latestPlan.plan?.schedule||[]).length} 天选题</div><div class="note" style="margin-top:8px">完整内容计划见「运营决议」页</div>`:emptyState('暂无内容计划')}
     </div>
   </div>
-</div>
 
-<script>
-const API = '/api/app';
-let D = {};
-let editingId = null;
-
-function tick() { const n=new Date(); document.getElementById('clockDisplay').textContent=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0'); }
-setInterval(tick, 30000); tick();
-
-document.querySelectorAll('.nav-item').forEach(it=>it.addEventListener('click',()=>{
-  document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));
-  it.classList.add('active');
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+it.dataset.page).classList.add('active');
-}));
-
-async function fetchData() {
-  const btn=document.getElementById('refreshBtn'); btn.classList.add('spinning');
-  try{const r=await fetch(API);D=await r.json();renderAll();
-    document.getElementById('connDot').className='dot ok';
-    document.getElementById('connText').textContent='已连接';
-  }catch(e){document.getElementById('connDot').className='dot off';
-    document.getElementById('connText').textContent='连接失败，重试中…';
-  }finally{setTimeout(()=>btn.classList.remove('spinning'),350);}
-}
-
-function fmtDate(s){if(!s)return'--';return s.slice(5).replace(/-/g,'/');}
-function fmtDt(iso){if(!iso)return'--';try{return new Date(iso).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch{return iso.slice(0,16);}
-}
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-function mkTag(cls,text){return`<span class="tag ${cls}">${esc(text)}</span>`;}
-function mkBadge(ok,text){return`<span class="badge-sm ${ok?'badge-pub':'badge-fail'}">${text}</span>`;}
-
-function renderAll(){
-  const now=new Date();
-  document.getElementById('lastUpdated').textContent='最后更新: '+now.toLocaleTimeString('zh-CN');
-  if(D.account) document.getElementById('accountName').textContent=D.account+' · 内容运营中心';
-  const o=D.overview||{};
-  document.getElementById('kpiFollowers').textContent=o.followers??'--';
-  document.getElementById('kpiPublished').textContent=o.publishedCount??'--';
-  document.getElementById('kpiPassRate').textContent=(o.passRate??0)+'%';
-  document.getElementById('kpiReads').textContent=o.yesterdayReads>0?o.yesterdayReads:'--';
-  document.getElementById('kpiReadsChange').textContent=o.yesterdayChange!=='N/A'&&o.yesterdayChange!==undefined?o.yesterdayChange:'';
-
-  document.getElementById('followerBig').textContent=o.followers??'--';
-  document.getElementById('followerTarget').textContent=o.followerTarget??100;
-  document.getElementById('followerGap').textContent=Math.max(0,(o.followerTarget??100)-(o.followers??0));
-  const pct=Math.min(100,o.followerPct??0);
-  document.getElementById('progFill').style.width=pct+'%';
-  document.getElementById('followerPctLabel').textContent=`进度 ${pct}%`;
-  document.getElementById('checkTime').textContent=o.latestCheck?'更新于 '+fmtDt(o.latestCheck):'';
-
-  const loginEl=document.getElementById('loginBadge');
-  if(o.wxLoginState==='LOGGED_IN'){loginEl.className='tag tag-web';loginEl.textContent='● 微信登录正常';}
-  else if(o.wxLoginState==='NEEDS_REFRESH'){loginEl.className='tag tag-draft';loginEl.textContent='● 需重新扫码';}
-  else{loginEl.className='tag tag-draft';loginEl.textContent='● 状态未知';}
-
-  drawReadChart();drawUserChart();renderDiagnostics();renderStrategies();
-  renderTopArticles();renderWeekPlan();renderRecentPosts();renderAlerts();
-  renderTopics();renderKanban();renderArticles('');renderDrafts();renderPublish();
-  renderChannels();renderAnnualPlan();
-}
-
-// ── Read Trend Chart ──
-function drawReadChart(){
-  const canvas=document.getElementById('readChart'),labels=document.getElementById('readLabels');
-  const data=D.trend||[];if(!data.length){canvas.height=200*2;labels.innerHTML='';return;}
-  const W=canvas.parentElement.clientWidth,H=200;
-  canvas.width=W*2;canvas.height=H*2;canvas.style.width=W+'px';canvas.style.height=H+'px';
-  const ctx=canvas.getContext('2d');ctx.scale(2,2);
-  const pad={t:20,r:16,b:28,l:44},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  const maxVal=Math.max(...data.map(d=>d.reads),1)*1.15;
-  ctx.clearRect(0,0,W,H);
-  // grid
-  ctx.strokeStyle='#E2E8F0';ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){const y=pad.t+(ch/4)*i;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
-    const val=Math.round(maxVal-(maxVal/4)*i);
-    ctx.fillStyle='#94A3B8';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(val,pad.l-6,y+4);}
-  // gradient fill
-  const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
-  grad.addColorStop(0,'rgba(17,104,183,.22)');grad.addColorStop(1,'rgba(17,104,183,.02)');
-  ctx.beginPath();
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.reads/maxVal)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-  ctx.lineTo(pad.l+cw,pad.t+ch);ctx.lineTo(pad.l,pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  // line
-  ctx.beginPath();
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.reads/maxVal)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-  ctx.strokeStyle='#1168b7';ctx.lineWidth=2.5;ctx.stroke();
-  // dots
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.reads/maxVal)*ch;
-    ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#1168b7';ctx.lineWidth=2;ctx.stroke();
-    ctx.fillStyle='#1168b7';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(d.reads,x,y-10);});
-  labels.innerHTML=data.map(d=>`<span>${d.date}</span>`).join('');
-}
-
-// ── User Growth Chart ──
-function drawUserChart(){
-  const canvas=document.getElementById('userChart'),labels=document.getElementById('userLabels');
-  const data=D.userTrend||[];if(!data.length){canvas.height=200*2;labels.innerHTML='';return;}
-  const W=canvas.parentElement.clientWidth,H=200;
-  canvas.width=W*2;canvas.height=H*2;canvas.style.width=W+'px';canvas.style.height=H+'px';
-  const ctx=canvas.getContext('2d');ctx.scale(2,2);
-  const pad={t:20,r:16,b:28,l:40},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  const maxVal=Math.max(...data.map(d=>d.total),10)*1.2;
-  ctx.clearRect(0,0,W,H);
-  ctx.strokeStyle='#E2E8F0';ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){const y=pad.t+(ch/4)*i;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
-    const val=Math.round(maxVal-(maxVal/4)*i);
-    ctx.fillStyle='#94A3B8';ctx.font='10px sans-serif';ctx.textAlign='right';ctx.fillText(val,pad.l-6,y+4);}
-  const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
-  grad.addColorStop(0,'rgba(73,184,169,.25)');grad.addColorStop(1,'rgba(73,184,169,.01)');
-  ctx.beginPath();
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.total/maxVal)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-  ctx.lineTo(pad.l+cw,pad.t+ch);ctx.lineTo(pad.l,pad.t+ch);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
-  ctx.beginPath();
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.total/maxVal)*ch;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
-  ctx.strokeStyle='#49b8a9';ctx.lineWidth=2;ctx.stroke();
-  data.forEach((d,i)=>{const x=pad.l+(cw/(data.length-1||1))*i,y=pad.t+ch-(d.total/maxVal)*ch;
-    ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#49b8a9';ctx.lineWidth=2;ctx.stroke();});
-  labels.innerHTML=data.map(d=>`<span>${d.date}</span>`).join('');
-}
-
-// ── Channels ──
-function renderChannels(){
-  const ch=D.wrChannels||{};
-  const order=['推荐','搜一搜','公众号消息','聊天会话','朋友圈','公众号主页','其他'];
-  let html='';
-  order.forEach(k=>{
-    const v=parseFloat(ch[k])||0;
-    html+=`<div class="ch-bar"><span class="ch-name">${k}</span><div class="ch-track"><div class="ch-fill" style="width:${v}%"></div></div><span class="ch-val">${v.toFixed(1)}%</span></div>`;
-  });
-  document.getElementById('channelList').innerHTML=html;
-}
-
-// ── Annual Plan ──
-function renderAnnualPlan(){
-  const plan=D.annualPlan||{};
-  const mp=plan.monthlyTargets||[];
-  const ms=plan.keyMilestones||[];
-  const prog=plan.currentProgress||{};
-
-  let html=`<div style="margin-bottom:14px;padding:12px;background:rgba(17,104,183,.06);border-radius:10px;border:1px solid rgba(17,104,183,.12)">
-    <div style="font-size:13px;font-weight:700;color:var(--brand);margin-bottom:6px">📌 全年目标</div>
-    <div style="display:flex;gap:16px;font-size:12px;color:var(--body)">
-      <span>粉丝目标：<b style="color:var(--brand)">${plan.targetFollowers||'—'}</b> 人</span>
-      <span>文章目标：<b style="color:var(--brand)">${plan.targetArticles||'—'}</b> 篇</span>
-      <span>完成进度：<b style="color:#1a8a6e">${prog.pct||'—'}%</b></span>
+  ${card('经营驾驶舱 · 快速问答','直接回答经营核心问题', '')}
+  <div class="grid2">
+    <div>
+      <div class="card-h" style="font-size:12px">上周的改动有没有效果？</div>
+      ${(()=>{ const acc=latestRes?.last_week_acceptance; if(!acc||!acc.available) return '<div class="li-m muted">无上一期决议可验收（首期或历史缺失）。</div>';
+        const items=acc.items||[];
+        const vC={验证有效:0,验证无效:0,证据不足:0}; items.forEach(i=>{if(vC[i.verdict]!=null)vC[i.verdict]++;});
+        return `<div class="li-m" style="font-size:12px;line-height:1.7">上期 ${esc(acc.period||'')} 共 ${items.length} 条决议验收：<b class="b-ok">${vC.验证有效} 项有效</b> · ${vC.验证无效} 项无效 · <b class="b-warn">${vC.证据不足} 项证据不足</b><br>${(items.slice(0,3)).map(i=>`· ${esc(i.name)} → ${esc(i.verdict)}`).join('<br>')}<div class="note" style="margin-top:6px">证据不足项不据此下结论，见「运营决议」页完整验收表</div></div>`; })()}
+    </div>
+    <div>
+      <div class="card-h" style="font-size:12px">下周准备调整什么？</div>
+      ${(()=>{ const items=latestRes?.resolutions||[]; const adj=items.filter(r=>r.category==='重点调整'); if(!adj.length) return '<div class="li-m muted">本期无"重点调整"类决议，维持当前节奏。</div>';
+        return `<div class="li-m" style="font-size:12px;line-height:1.7">${adj.slice(0,3).map(r=>`· <b>${esc(r.name)}</b>：${esc(r.action)}`).join('<br>')}<div class="note" style="margin-top:6px">共 ${items.length} 条决议（保持/调整/停止/新增），完整见「运营决议」页</div></div>`; })()}
     </div>
   </div>`;
+  document.getElementById('page-overview').innerHTML=html;
+}
 
-  html+='<div class="plan-timeline">';
-  ms.forEach(m=>{
-    const cls=m.status==='进行中'?'active':'done';
-    html+=`<div class="plan-item ${cls}">
-      <div class="plan-date">${m.date}</div>
-      <div class="plan-text">${m.milestone}</div>
-      <div class="plan-note">状态：${m.status}</div>
+/* ═══ 2 经营数据 ═══ */
+function renderData(){
+  const ug=D.userGrowth||{}; const o=D.overview||{};
+  const states=D.dataStates||{};
+  let html=`
+  ${card('用户增长中心','真实数据源：后台用户日增')}
+  <div class="grid4" style="margin-bottom:10px">
+    <div class="kpi"><div class="kpi-num">${ug.total??'--'}</div><div class="kpi-label">累计粉丝 ${stateBadge(states.followers?.state)}</div></div>
+    <div class="kpi"><div class="kpi-num ${ug.weeklyNet<0?'crit':ug.weeklyNet>0?'ok':''}">${(ug.weeklyNet||0)>0?'+':''}${ug.weeklyNet||0}</div><div class="kpi-label">本周净增长</div></div>
+    <div class="kpi"><div class="kpi-num">${ug.newTotal||0}</div><div class="kpi-label">累计新增</div></div>
+    <div class="kpi"><div class="kpi-num ${ug.lostTotal>0?'crit':''}">${ug.lostTotal||0}</div><div class="kpi-label">累计流失</div></div>
+  </div>
+  <div class="note">关注来源：${esc(ug.sourceNote||'暂无数据')}</div>
+  <div class="chart-wrap" style="margin-top:14px"><canvas id="userChart"></canvas><div class="chl" id="userLabels"></div></div>
+
+  ${card('流量分析中心','渠道占比（近一周）')}
+  <div class="note">真实数据源：周度复盘渠道统计；缺失维度标注"暂无"，不虚构。</div>
+  <div class="chart-wrap" style="margin:10px 0"><canvas id="chanChart"></canvas></div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>渠道</th><th>占比</th></tr></thead><tbody>
+    ${Object.entries(D.wrChannels||{}).map(([k,v])=>`<tr><td>${esc(k)}</td><td><b style="color:var(--brand)">${v}%</b></td></tr>`).join('') || '<tr><td colspan="2" class="muted">暂无渠道数据</td></tr>'}
+  </tbody></table></div>
+
+  ${card('经营目标中心','由 WorkBuddy 提供，看板仅展示')}
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>目标</th><th>目标值</th><th>当前</th><th>完成率</th></tr></thead><tbody>
+    ${ (D.annualPlan?.monthlyTargets||[]).map(m=>`<tr><td>${esc(m.month)} · ${esc(m.note||'')}</td><td>${esc(m.goal)}</td><td>${esc(m.actual)}</td><td>${m.goal==='100'&&m.actual==='12'?'12%':'—'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">暂无目标数据</td></tr>' }
+  </tbody></table></div>
+  <div class="note">里程碑：${(D.annualPlan?.keyMilestones||[]).map(m=>`${esc(m.milestone)}(${esc(m.status)})`).join(' · ')}</div>
+
+  ${card('经营目标追踪','长期 / 季度 / 月度 / 周度 / 阶段 · 真实进度','阶段转换需真实数据支撑')}
+  ${(()=>{ const g=D.businessGoals; if(!g||!g.goals?.length) return emptyState('暂无目标数据');
+    const sBadge=s=>s==='已达成'?'b-ok':s==='进行中'?'b-info':'b-mute';
+    return `
+    <div class="grid4" style="margin-bottom:10px">
+      ${g.goals.map(x=>`<div class="kpi"><div class="kpi-num ${sBadge(x.status)=== 'b-ok'?'ok':sBadge(x.status)==='b-info'?'':'muted'}">${x.pct??'--'}%</div><div class="kpi-label">${esc(x.name)}</div><div class="kpi-sub">${esc(x.current??'--')} / ${esc(x.target??'--')} · 差 ${x.gap??'--'}</div><div class="prog"><i style="width:${x.pct||0}%"></i></div></div>`).join('')}
+    </div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>目标</th><th>周期</th><th>状态</th><th>偏差分析（WorkBuddy）</th></tr></thead><tbody>
+      ${g.goals.map(x=>`<tr><td>${esc(x.name)}</td><td class="muted">${esc(x.cycle)}</td><td><span class="badge ${sBadge(x.status)}">${esc(x.status)}</span></td><td class="muted" style="max-width:320px">${esc(x.deviation||'')}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${g.history?.length?`<div class="note">历史完成：${g.history.map(h=>`${esc(h.period)} 阅读 ${h.reads??'--'}${h.wow!=null?(h.wow>0?'+':'')+h.wow+'%':''}`).join(' · ')}</div>`:''}
+    <div class="note">${esc(g.phaseNote||'')}。目标数值/完成时间由 WorkBuddy 依据真实经营情况制定，看板仅展示。</div>`; })()}
+`;
+  document.getElementById('page-data').innerHTML=html;
+}
+
+/* ═══ 3 内容资产 ═══ */
+let _catFilter=''; let _artSearch=''; let _artSorted=false;
+function renderContent(){
+  const arts=D.articles||[];
+  let html=`
+  ${card('内容资产中心', arts.length+' 篇', `待发布 ${(D.drafts||[]).length} 篇`)}
+  <input class="search" id="artSearch" placeholder="搜索文章标题…" oninput="_artSearch=this.value;filterContent()" value="${esc(_artSearch)}">
+  <div class="filters" id="catChips">${(D.categories||[]).map(c=>`<span class="chip" onclick="toggleCat('${esc(c.name)}')">📁 ${esc(c.name)} ${c.total}</span>`).join('')}</div>
+  <div class="card-h" style="font-size:12px">高表现文章（近30天）</div>
+  ${(D.topArticles||[]).map((a,i)=>`<div class="li"><div style="display:flex;gap:10px;align-items:center"><span style="font-weight:800;color:var(--c${Math.min(i+1,5)})">${i+1}</span><div style="flex:1"><div class="li-t">${esc(a.title)}</div><div class="li-m">${a.pct||''} 占30天阅读</div></div><b style="color:var(--brand);font-size:16px">${a.reads}</b></div></div>`).join('') || emptyState('暂无')}
+
+  ${card('发布清单','点击筛选 / 排序', '点击列标题排序')}
+  <div id="artList" style="max-height:520px;overflow-y:auto"></div>
+  <div class="note">网站教程与公众号文章已按 business_date 建立关联；此处仅作只读查看，不扩展为网站管理系统。</div>
+
+  ${renderLifecycleBlock()}
+`;
+  document.getElementById('page-content').innerHTML=html;
+  filterContent();
+}
+
+/* ═══ V6 文章生命周期档案（融入内容资产页；分阶段数据无历史快照标"待观察"，不虚构）═══ */
+function renderLifecycleBlock(){
+  const al=D.articleLifecycle||[];
+  const hl=D.lifecycleHighlights||{};
+  if(!al.length) return card('文章生命周期档案','暂无', emptyState('暂无已发布文章的生命周期档案'));
+  const val=(v)=>v==null?'待观察':v;
+  const tagCls=t=>t==='高阅读'||t==='高搜索价值'?'b-ok':t==='高传播'||t==='高关注转化'?'b-info':'b-mute';
+  return `
+  ${card('文章生命周期档案',al.length+' 篇已发布','分阶段表现 · 数据不足标"待观察"')}
+  <div class="note" style="margin-bottom:10px">${esc(hl.watchNote||'')} · 无台账记录待补采 ${hl.pendingCount??'—'} 篇。</div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>文章</th><th>发布</th><th>累计阅读</th><th>搜索/推荐</th><th>分享</th><th>关注转化</th><th>24h/3d/7d/30d/90d</th><th>标签</th></tr></thead><tbody>
+    ${al.slice(0,40).map(a=>`<tr>
+      <td style="max-width:220px">${esc(a.title)}</td>
+      <td class="muted">${fmtDate(a.publishDate)}</td>
+      <td><b>${val(a.readsTotal)}</b></td>
+      <td class="muted">${val(a.searchReads)}/${val(a.recommendReads)}</td>
+      <td class="muted">${val(a.shares)}</td>
+      <td class="muted">${val(a.followsFromArticle)}</td>
+      <td class="muted" style="font-size:11px">${(a.stages||[]).map(s=>s.value).join(' / ')}</td>
+      <td style="max-width:160px">${(a.tags||[]).map(t=>`<span class="badge ${tagCls(t)}">${esc(t)}</span>`).join(' ')||'—'}</td>
+    </tr>`).join('')}
+  </tbody></table></div>
+  ${(()=>{ const hi=[['高阅读价值',hl.highReads],['高搜索价值',hl.highSearch],['高传播价值',hl.highShare],['长尾流量候选',hl.evergreen],['表现待观察',hl.lowPerform]].filter(x=>(x[1]||[]).length);
+    return hi.length?`<div class="grid2" style="margin-top:12px">${hi.map(([name,list])=>`<div><div class="card-h" style="font-size:12px">${esc(name)}</div>${list.map(a=>`<div class="li-m">· ${esc(a.title)}（${a.readsTotal??'--'} 阅读）</div>`).join('')}</div>`).join('')}</div>`:''; })()}
+  `;
+}
+function toggleCat(c){ _catFilter = _catFilter===c?'':c;
+  document.querySelectorAll('#catChips .chip').forEach(x=>x.classList.toggle('on', x.textContent.includes(c)&&_catFilter===c));
+  filterContent();
+}
+function filterContent(){
+  const list=(()=>{
+    let a=(D.articles||[]).slice();
+    if(_catFilter) a=a.filter(x=>x.category===_catFilter);
+    if(_artSearch) a=a.filter(x=>(x.title||'').toLowerCase().includes(_artSearch.toLowerCase()));
+    if(_artSorted) a.sort((x,y)=>(y.wechatReads||0)-(x.wechatReads||0));
+    return a;
+  })();
+  const stMap={PUBLISHED:['st-pass','已发布'],VERIFIED:['st-pending','已校验'],PENDING:['st-block','待发布']};
+  document.getElementById('artList').innerHTML = `<div class="tbl-wrap"><table class="t" onclick="event.target.closest('th[data-sort]')?(_artSorted=!_artSorted,filterContent()):0">
+    <thead><tr><th data-sort="1">日期</th><th>标题</th><th data-sort="1">阅读</th><th data-sort="1">分享</th><th>状态</th></tr></thead>
+    <tbody>${list.slice(0,60).map(a=>{ const st=stMap[a.webStatus]||['st-mute',a.webStatus];
+      return `<tr><td class="muted">${fmtDate(a.date)}</td><td style="max-width:280px">${esc(a.title)}</td><td>${a.wechatReads||0}</td><td>${a.shares||0}</td><td><span class="st ${st[0]}">${st[1]}</span></td></tr>`;}).join('') || '<tr><td colspan="5" class="muted">无匹配文章</td></tr>'}
+  </tbody></table></div>`;
+}
+
+/* ═══ 4 工作监督 ═══ */
+function renderWork(){
+  const wl=D.workLog||[]; const ws=D.workSummary||{};
+  const stCls={'验收通过':'st-pass','待验收':'st-pending','执行中':'st-mute','执行失败':'st-block','执行阻塞':'st-block','已取消':'st-mute','状态未知':'st-mute','待执行':'st-mute'};
+  let html=`
+  ${card('WorkBuddy 工作监督','来源：真实发布回执')}
+  <div class="grid4" style="margin-bottom:12px">
+    ${Object.entries(ws.byStatus||{}).map(([k,v])=>`<div class="kpi"><div class="kpi-num">${v}</div><div class="kpi-label">${esc(k)}</div></div>`).join('') || '<div class="kpi"><div class="kpi-num muted">0</div><div class="kpi-label">暂无记录</div></div>'}
+  </div>
+  <div class="note">所有状态均来源于真实回执；无法获取实时状态时显示最后同步时间，不假装实时运行。看板不提供启动/暂停/重试/修改任务能力。</div>
+  <div class="tbl-wrap" style="margin-top:10px"><table class="t"><thead>
+    <tr><th>任务编号</th><th>任务</th><th>计划</th><th>完成</th><th>进度</th><th>状态</th><th>验收</th></tr></thead>
+    <tbody>${wl.map(w=>`<tr>
+      <td class="muted" style="font-family:monospace;font-size:11px">${esc(w.taskNo)}</td>
+      <td style="max-width:240px">${esc(w.title)}</td>
+      <td class="muted">${fmtDate(w.planDate)}</td>
+      <td class="muted">${w.completeAt?fmtDt(w.completeAt):'--'}</td>
+      <td>${w.progress!=null?`<div class="prog" style="width:60px;margin:0"><i style="width:${w.progress}%"></i></div>`:'--'}</td>
+      <td><span class="st ${stCls[w.status]||'st-mute'}">${esc(w.status)}</span></td>
+      <td class="muted">${esc(w.acceptance||'--')}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="muted">暂无工作记录</td></tr>'}
+  </tbody></table></div>`;
+  document.getElementById('page-work').innerHTML=html;
+}
+
+/* ═══ 5 盈利管理 ═══ */
+function renderRevenue(){
+  const r=D.revenue||{};
+  const notC=!r.connected;
+  const tm=r.trafficMaster||{};
+  const qk=r.quarkPullNew||{};
+  const gg=r.growthGoals||{};
+  const phases=r.phases||[];
+  const phaseIdx=phases.indexOf(r.phase);
+  // 5 阶段进度（高亮当前阶段）
+  const phaseBar=`<div class="phase-track">${phases.map((p,i)=>`<div class="phase-node ${i===phaseIdx?'on':i<phaseIdx?'done':''}"><i></i><span>${esc(p)}</span></div>`).join('')}</div>`;
+  // 流量主门槛差距条（官方 100/500，内部目标单独标）
+  const offC=tm.officialCondition||{};
+  const tC=offC.commissionThreshold||100, tP=offC.programmaticThreshold||500;
+  const pct=v=>Math.min(100,Math.round((v||0)/tP*100));
+  let html=`
+  ${card('盈利中心','分阶段经营 · 当前：'+esc(r.phase||'粉丝积累期'), r.phase?`<span class="badge ${phaseIdx<=1?'b-info':'b-ok'}">${esc(r.phase)}</span>`:'<span class="badge b-warn">未接入</span>')}
+
+  ${card('经营阶段','WorkBuddy 提供 · 看板仅展示', r.phaseNote?esc(r.phaseNote):'')}
+  ${phaseBar}
+  <div class="note" style="margin-top:10px">${esc(r.phaseNote||'经营阶段由 WorkBuddy 根据真实经营情况提供，经营指挥中心仅负责展示')}</div>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card" style="margin:0"><div class="card-h">内容运营成果 ${gg.contentOutput?`<span class="hint">通关率 ${gg.contentOutput.passRate||0}%</span>`:''}</div>
+      <div class="grid4" style="margin:0">
+        <div class="kpi"><div class="kpi-num">${gg.contentOutput?.publishedCount?esc(gg.contentOutput.publishedCount):esc(D.overview?.publishedCount??'--')}</div><div class="kpi-label">已发布</div></div>
+        <div class="kpi"><div class="kpi-num">${gg.contentOutput?.pendingDrafts?esc(gg.contentOutput.pendingDrafts):esc(D.overview?.pendingDrafts??'--')}</div><div class="kpi-label">待发布</div></div>
+        <div class="kpi"><div class="kpi-num">${esc(D.overview?.totalArticles??'--')}</div><div class="kpi-label">总文章</div></div>
+        <div class="kpi"><div class="kpi-num ${D.overview?.yesterdayReads>0?'':'muted'}">${esc(D.overview?.yesterdayReads??'--')}</div><div class="kpi-label">昨日阅读</div></div>
+      </div>
+      <div class="note">内容运营是当前经营重点：${esc((gg.focus||['内容运营','流量获取','粉丝积累']).join('、'))}</div></div>
+
+    <div class="card" style="margin:0"><div class="card-h">粉丝增长 · 阅读增长</div>
+      <div class="grid2" style="margin:0;gap:10px">
+        <div class="kpi"><div class="kpi-num">${esc(gg.followerTarget??D.overview?.followers??'--')}<span style="font-size:13px;color:var(--dim)"> 目标</span></div><div class="kpi-label">粉丝目标 · 当前 ${esc(D.overview?.followers??'--')}（${esc(gg.followerProgress??D.overview?.followerPct??0)}%）</div><div class="prog"><i style="width:${esc(gg.followerProgress??D.overview?.followerPct??0)}%"></i></div></div>
+        <div class="kpi"><div class="kpi-num">${esc(gg.readers30d??D.overview?.totalReaders30d??'--')}</div><div class="kpi-label">30天阅读 · 周环比 ${esc(D.overview?.wrWoW??'--')}%</div></div>
+      </div>
+    </div>
+  </div>
+
+  ${card('流量主开通准备','官方门槛分层 · 开通后接入真实收益', tm.opened?'<span class="badge b-ok">已开通</span>':`<span class="badge b-mute">${esc(tm.openStatus||'未开通')}</span>`)}
+  <div class="grid4" style="margin-bottom:10px">
+    <div class="kpi"><div class="kpi-num ${pct(tm.currentFollowers)<pct(tC)?'muted':''}">${esc(tm.currentFollowers??'--')}</div><div class="kpi-label">当前粉丝</div></div>
+    <div class="kpi"><div class="kpi-num ${tm.gapToCommission>0?'warn':'ok'}">${tm.gapToCommission>0?'+'+tm.gapToCommission:'0'}</div><div class="kpi-label">距返佣门槛(${tC})</div></div>
+    <div class="kpi"><div class="kpi-num ${tm.gapToProgrammatic>0?'warn':'ok'}">${tm.gapToProgrammatic>0?'+'+tm.gapToProgrammatic:'0'}</div><div class="kpi-label">距程序化门槛(${tP})</div></div>
+    <div class="kpi"><div class="kpi-num muted">${esc(tm.readiness||'--')}</div><div class="kpi-label">开通准备状态</div></div>
+  </div>
+  <div class="note" style="margin-bottom:6px"><b>官方开通条件</b>（以微信官方最新规则为准，本看板仅展示）：</div>
+  ${(offC.notes||[]).map(n=>`<div class="li"><div class="li-m" style="font-size:12px">· ${esc(n)}</div></div>`).join('')}
+  <div class="note" style="margin-top:10px">⚠️ 内部阶段目标（${esc(tm.internalTarget??'--')} 粉，完成率 ${esc(gg.followerProgress??D.overview?.followerPct??0)}%）为运营参考，<b>非官方开通门槛</b>；官方返佣门槛 ${tC}、程序化门槛 ${tP}，两者严格区分。</div>
+
+  ${card('夸克网盘拉新', qk.started?'<span class="badge b-info">运行中</span>':'<span class="badge b-warn">尚未启动</span>')}
+  <div class="grid4" style="margin-bottom:8px">
+    <div class="kpi"><div class="kpi-num muted">${qk.newUsers?esc(qk.newUsers):'--'}</div><div class="kpi-label">拉新人数</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.commission?esc(qk.commission):'--'}</div><div class="kpi-label">佣金</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.conversionRate?esc(qk.conversionRate):'--'}</div><div class="kpi-label">转化率</div></div>
+    <div class="kpi"><div class="kpi-num muted">${qk.income?esc(qk.income):'--'}</div><div class="kpi-label">收益</div></div>
+  </div>
+  <div class="note" style="margin-top:6px">当前明确「尚未启动」：${esc(qk.pauseReason||'')}${qk.launchConditionNote?`<br><span style="color:var(--dim)">启动建议：${esc(qk.launchConditionNote)}</span>`:''}</div>
+
+  ${card('WorkBuddy 下一阶段经营计划','由 WorkBuddy 制定 · 看板仅展示', '')}
+  ${(r.nextStagePlan||[]).map((s,i)=>`<div class="li"><div class="li-t" style="font-size:12.5px">${i+1}. ${esc(s)}</div></div>`).join('')||emptyState('暂无计划')}
+
+  ${card('已确认经营成本','仅列已确认实际发生项 · 未发生保持 null，不虚构')}
+  <div class="grid3" style="margin-bottom:8px">
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.ai?esc(r.confirmedCosts.ai):'--'}</div><div class="kpi-label">AI 服务</div></div>
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.server?esc(r.confirmedCosts.server):'--'}</div><div class="kpi-label">服务器</div></div>
+    <div class="kpi"><div class="kpi-num muted">${r.confirmedCosts?.cumulative?esc(r.confirmedCosts.cumulative):'--'}</div><div class="kpi-label">累计成本</div></div>
+  </div>
+  <div class="note">${esc(r.confirmedCosts?.note||'')}${notC?`<br>净利润 / 待结算 / 盈亏平衡：盈利业务启动并接入真实财务数据后显示，当前 ${esc(r.status||'未接入')}，不伪造金额。`:''}</div>
+
+  <div class="card"><div class="card-h">保留的扩展能力</div>
+  <div class="note">已保留完整盈利数据结构：流量主收入、夸克拉新收入、有效拉新人数、待结算金额、实际到账金额、经营成本、净利润、历史收益趋势。未来正式开展盈利业务后可直接接入，无需重新建设盈利中心。</div></div>`;
+  document.getElementById('page-revenue').innerHTML=html;
+}
+
+/* ═══ 6 策略与复盘 ═══ */
+function renderStrategy(){
+  const s=D.strategies||[];
+  let html=`
+  ${card('经营策略中心','由 WorkBuddy 制定，看板仅展示，不自行制定/修改')}
+  ${s.map(x=>`<div class="li"><div class="li-t">${x.icon} ${esc(x.title)}</div><div class="li-m">${esc(x.desc)}</div></div>`).join('') || emptyState('暂无策略')}
+
+  ${card('年度经营目标')}
+  ${(()=>{ const p=D.annualPlan; if(!p)return emptyState('暂无');
+    return `<div class="grid4" style="margin-bottom:10px">
+      <div class="kpi"><div class="kpi-num">${p.currentProgress?.pct||0}%</div><div class="kpi-label">目标完成率</div></div>
+      <div class="kpi"><div class="kpi-num">${p.targetFollowers}</div><div class="kpi-label">全年粉丝目标</div></div>
+      <div class="kpi"><div class="kpi-num">${p.targetArticles}</div><div class="kpi-label">全年文章目标</div></div>
+      <div class="kpi"><div class="kpi-num">${p.currentProgress?.articles||0}</div><div class="kpi-label">已发布</div></div>
+    </div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>节点</th><th>目标</th><th>实际</th><th>说明</th></tr></thead><tbody>
+    ${p.monthlyTargets?.map(m=>`<tr><td>${esc(m.month)}</td><td>${esc(m.goal)}</td><td>${esc(m.actual)}</td><td class="muted">${esc(m.note||'')}</td></tr>`).join('')||''}</tbody></table></div>`; })()}
+
+  ${card('经营复盘中心','WorkBuddy 生成的历史报告，支持检索，历史不覆盖')}
+  ${(()=>{ const rep=(D.reviews&&D.reviews.length)?D.reviews:REVIEWS; if(!rep.length) return emptyState('暂无历史报告');
+    return `<div class="tbl-wrap"><table class="t"><thead><tr><th>报告</th><th>周期</th><th>本周阅读</th><th>环比</th></tr></thead><tbody>
+    ${rep.map(r=>`<tr><td>${esc(r.name)}</td><td class="muted">${esc((r.window&&(r.window.begin+'~'+r.window.end))||'--')}</td><td>${r.reads?.this_week??'--'}</td><td style="color:${(r.reads?.wow_pct||0)<0?'var(--crit)':'var(--ok)'}">${(r.reads?.wow_pct||0)>0?'+':''}${r.reads?.wow_pct??'--'}%</td></tr>`).join('')}</tbody></table></div>`; })()}`;
+  document.getElementById('page-strategy').innerHTML=html;
+}
+
+/* ═══ 6b 运营决议与内容计划（周度运营闭环）═══ */
+function renderResolution(){
+  const res=D.weeklyResolutions||[];
+  const plans=D.contentPlans||[];
+  let cur=D.latestResolution||null;
+  // 历史决议查询（按年/月/周次，全量在 D.weeklyResolutions）
+  let selIdx=cur?(res.length-1):0;
+  const pick=(i)=>{ cur=res[i]||null; };
+  let html=`
+  ${card('运营决议与内容计划中心','由 WorkBuddy 制定 · 看板仅展示 · 历史不覆盖', cur?`<span class="badge b-info">最新一期</span>`:'')}
+
+  ${(()=>{
+    if(!cur) return `<div class="grid3" style="margin-bottom:12px">${card('本周复盘','暂无','WorkBuddy 周日生成后展示')}${card('下周决议','暂无','—')}${card('内容计划','暂无','—')}</div>` + emptyState('暂无运营决议，等待本周日 20:00 自动生成');
+    const cats={}; (cur.resolutions||[]).forEach(r=>{cats[r.category]=(cats[r.category]||0)+1;});
+    return `<div class="grid4" style="margin-bottom:12px">
+      <div class="kpi"><div class="kpi-num">${esc(cur.period||'--')}</div><div class="kpi-label">复盘周期（本自然周）</div></div>
+      <div class="kpi"><div class="kpi-num">${(cur.resolutions||[]).length}</div><div class="kpi-label">决议条数</div></div>
+      <div class="kpi"><div class="kpi-num muted">${esc(cur.phase||'粉丝积累期')}</div><div class="kpi-label">经营阶段</div></div>
+      <div class="kpi"><div class="kpi-num">${cur.last_week_acceptance?.available?(cur.last_week_acceptance.items?.length||0):'无'}</div><div class="kpi-label">上周决议验收</div></div>
     </div>`;
-  });
-  html+='</div>';
+  })()}
 
-  if(mp.length){
-    html+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-      <div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:8px">月度跟踪</div>';
-    mp.forEach(m=>{
-      html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(226,232,240,.5);font-size:12px">
-        <span style="font-weight:600;color:var(--title)">${m.month}</span>
-        <span style="color:var(--dim)">目标 ${m.goal}${m.actual?` / 实 ${m.actual}`:''}</span>
-        <span style="font-size:11px;color:var(--sub);max-width:100px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.note||''}</span>
-      </div>`;
-    });
-    html+='</div>';
-  }
-  document.getElementById('annualPlan').innerHTML=html;
-}
+  ${(()=>{ const acc=cur?.last_week_acceptance; if(!acc||!acc.available) return card('上周决议执行验收','首期或历史缺失', emptyState(esc(cur?acc?.note||'无上期决议':'')));
+    return card('上周决议执行验收','逐条核验真实数据，证据不足标记待验证',
+      `<div class="note" style="margin-bottom:8px">${esc(acc.note)}</div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>编号</th><th>决议</th><th>验收结果</th><th>说明</th><th>结论</th></tr></thead><tbody>
+      ${acc.items.map(it=>`<tr><td class="muted" style="font-family:monospace">${esc(it.resolutionNo)}</td><td style="max-width:200px">${esc(it.name)}</td>
+      <td><span class="badge ${it.verdict==='验证有效'?'b-ok':it.verdict==='验证无效'?'b-crit':it.verdict==='待验证'?'b-info':'b-mute'}">${esc(it.verdict)}</span></td>
+      <td class="muted" style="max-width:240px">${esc(it.detail)}</td><td>${esc(it.continued?'继续':it.adjustOrStop)}</td></tr>`).join('')}
+      </tbody></table></div>`); })()}
 
-// ── Diagnostics ──
-function renderDiagnostics(){
-  const diag=D.diagnostics||{};const findings=diag.findings||[];
-  const c=findings.filter(f=>f.type==='critical').length;
-  const w=findings.filter(f=>f.type==='warning').length;
-  document.getElementById('diagCount').textContent=`${c}关键/${w}警告`;
-  document.getElementById('diagCount').className='badge '+(c>0?'badge-danger':w>0?'badge-warn':'badge-ok');
-  let html='';
-  findings.forEach(f=>{
-    const cls=f.type==='critical'?'critical':f.type==='warning'?'warning':'info';
-    html+=`<div class="diag-card ${cls}"><div class="diag-title">${f.icon} ${esc(f.title)}</div>
-      <div class="diag-msg">${esc(f.msg)}</div>
-      ${f.action?`<div class="diag-action">${esc(f.action)} →</div>`:''}</div>`;
-  });
-  if(!findings.length)html='<div class="empty"><p>暂无诊断项 ✓</p></div>';
-  document.getElementById('diagList').innerHTML=html;
-}
+  ${(()=>{ const items=cur?.resolutions||[]; if(!items.length) return '';
+    const order=['继续保持','重点调整','停止执行','新增尝试'];
+    const cname={继续保持:'✅ 继续保持',重点调整:'🔧 重点调整',停止执行:'⛔ 停止执行',新增尝试:'🧪 新增尝试'};
+    return order.filter(c=>items.some(x=>x.category===c)).map(c=>`
+      ${card(cname[c],items.filter(x=>x.category===c).length+' 条')}
+      ${items.filter(x=>x.category===c).map(r=>`<div class="li">
+        <div class="li-t"><span style="font-family:monospace;color:var(--dim);font-size:11px">${esc(r.no)}</span> ${esc(r.name)} <span class="badge ${r.priority==='high'?'b-crit':r.priority==='medium'?'b-warn':'b-info'}">${esc(r.priority)}</span> <span class="badge b-mute">${esc(r.status)}</span></div>
+        <div class="li-m" style="margin-top:6px">问题：${esc(r.problem)}</div>
+        <div class="li-m">依据：${esc(r.evidence)}</div>
+        <div class="li-m">调整前：${esc(r.before)} → 调整后：${esc(r.after)}</div>
+        <div class="li-m">执行要求：${esc(r.action)}</div>
+        <div class="li-m">预期：${esc(r.expectedEffect)} · 时间：${esc(r.timing)} · 验收：${esc(r.acceptanceMetric)}</div>
+      </div>`).join('')}`).join(''); })()}
 
-// ── Strategies ──
-function renderStrategies(){
-  const tips=D.strategies||[];
-  let html='';tips.forEach(t=>{html+=`<div class="strat-card"><div class="strat-title">${t.icon} ${esc(t.title)}</div><div class="strat-desc">${esc(t.desc)}</div></div>`;});
-  document.getElementById('stratList').innerHTML=html||'<div class="empty"><p>暂无建议</p></div>';
-}
+  ${(()=>{ const p=D.latestContentPlan; if(!p) return card('下周内容更新计划','暂无','由 WorkBuddy 生成后展示');
+    const sc=p.plan?.schedule||[];
+    return card('下周内容更新计划 · '+esc(p.for_period||''),'基于本期决议 · 周一~周日候选选题',
+      `<div class="note" style="margin-bottom:8px">核心方向：${esc(p.plan?.coreDirection||'—')} · 重点 ${(p.plan?.focusCategories||[]).join('、')}${(p.plan?.newTestCategories||[]).length?' · 新增测试 '+(p.plan?.newTestCategories||[]).join('、'):''}${(p.plan?.reduceCategories||[]).length?' · 减少 '+(p.plan?.reduceCategories||[]).join('、'):''}</div>
+      <div class="tbl-wrap"><table class="t"><thead><tr><th>日</th><th>选题方向</th><th>推荐标题</th><th>依据/需求</th><th>差异化</th><th>决议</th></tr></thead><tbody>
+      ${sc.map(s=>`<tr><td>${esc(s.day)}</td><td>${esc(s.topic)}</td><td style="max-width:220px">${esc(s.title)}</td><td class="muted" style="max-width:180px">${esc(s.basis)}（${esc(s.userNeed)}）</td><td class="muted">${esc(s.differentiation)}</td><td class="muted">${esc(s.resolutionRef)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="note" style="margin-top:8px">发布时间：周二~周四 08:00-09:00 · 验证指标：发布 24h 阅读 ≥ 周均 · 每日实际生产参考最新决议，调整须记录原因</div>`); })()}
 
-// ── Top Articles ──
-function renderTopArticles(){
-  const arts=D.topArticles||[];let html='';
-  arts.slice(0,10).forEach((a,i)=>{
-    const rc=i===0?'r1':i===1?'r2':i===2?'r3':'';
-    html+=`<div class="art-row"><div class="art-rank ${rc}">${i+1}</div><div class="art-info"><div class="art-title">${esc(a.title)}</div><div class="art-meta">${a.published} · 分享${a.share||'--'}</div></div><div class="art-reads">${a.reads||'--'}</div></div>`;
-  });
-  document.getElementById('topArtList').innerHTML=html||'<div class="empty"><p>暂无数据</p></div>';
+  ${(()=>{ const list=res; if(!list.length) return '';
+    return card('历史运营决议','按周期查询 · 完整保留', '默认最新一期');
+    +`<div class="tbl-wrap"><table class="t"><thead><tr><th>周期</th><th>下期</th><th>决议数</th><th>验收</th><th>阶段</th></tr></thead><tbody>
+    ${list.map((x,i)=>`<tr ${i===0?'style="background:color-mix(in srgb,var(--brand) 6%,transparent)"':''}><td>${esc(x.period||'--')}</td><td class="muted">${esc(x.next_period||'--')}</td><td>${x.resolutions?.length||0}</td><td class="muted">${x.last_week_acceptance?.available?(x.last_week_acceptance.items?.length+'条'):'无'}</td><td class="muted">${esc(x.phase||'—')}</td></tr>`).join('')}
+    </tbody></table></div>`; })()}`;
+  document.getElementById('page-resolution').innerHTML=html;
 }
 
-// ── Week plan ──
-function renderWeekPlan(){
-  const wp=D.thisWeekPlan||{};let html='';
-  if(wp.today){const ok=wp.today.status==='已发布';
-    html+=`<div class="item"><div class="item-main"><div class="item-date">${fmtDate(wp.today.date)}</div><div class="item-title">${esc(wp.today.title)}</div><div class="item-tags">${mkBadge(ok,wp.today.status)}</div></div></div>`;}
-  if(wp.tomorrow){html+=`<div class="item"><div class="item-main"><div class="item-date">${fmtDate(wp.tomorrow.date)}</div><div class="item-title">${esc(wp.tomorrow.title)}</div><div class="item-tags">${mkTag('tag-cat','待发布')}</div></div></div>`;}
-  document.getElementById('weekPlan').innerHTML=html||'<div class="empty"><p>暂无本周计划</p></div>';
+/* ═══ 6c 每日简报 ═══ */
+function renderBrief(){
+  const briefs=D.dailyBriefs||[];
+  let html=`
+  ${card('每日经营简报','WorkBuddy 自动生成 · 独立归档 · 不覆盖历史', briefs.length?`共 ${briefs.length} 期`:'')}
+  ${(()=>{
+    if(!briefs.length) return emptyState('暂无每日简报，等待今日 09:00 自动采集生成');
+    // 默认最新一期
+    const b=briefs[0];
+    const d=b.data||{};
+    const show=(x)=>{ const i=briefs.findIndex(v=>v.date===x.date); if(i>=0) document.getElementById('briefDetail').innerHTML=briefDetail(briefs[i]); };
+    return `
+    <div class="filters" id="briefDateSel" style="margin-bottom:12px">
+      ${briefs.map(x=>`<span class="chip ${x.date===b.date?'on':''}" onclick="document.querySelectorAll('#briefDateSel .chip').forEach(c=>c.classList.remove('on'));this.classList.add('on');briefPick('${esc(x.date)}')">${esc(x.date)}</span>`).join('')}
+    </div>
+    <div id="briefDetail">${briefDetail(b)}</div>`;
+  })()}
+  <div class="note">每日简报独立归档于 10_运营数据/daily_brief/，支持按历史日期查询；数据无变化时仍刷新"最近成功检查时间"，不因此显示为长期未更新。</div>`;
+  document.getElementById('page-brief').innerHTML=html;
+  window.briefPick=(date)=>{ const i=(D.dailyBriefs||[]).findIndex(v=>v.date===date); if(i>=0){ const el=document.getElementById('briefDetail'); if(el) el.innerHTML=briefDetail(D.dailyBriefs[i]); } };
+}
+function briefDetail(b){
+  const d=b.data||{}; const o=b.overview||{};
+  return `
+  <div class="card" style="background:var(--card2)">
+    <div class="card-h">简报 ${esc(b.date)} ${b.dataStatus?`<span class="hint">数据状态：${esc(b.dataStatus)}</span>`:''}</div>
+    <div class="grid4" style="margin-bottom:10px">
+      <div class="kpi"><div class="kpi-num">${esc(o.followers??'--')}</div><div class="kpi-label">累计粉丝 · 本周净增 ${esc(d.yesterday?.followersWeekNet??'未知')}</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(d.yesterday?.reads??o.yesterdayReads??'--')}</div><div class="kpi-label">昨日阅读 ${esc(d.yesterday?.change||'')}</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(o.totalReaders30d??'--')}</div><div class="kpi-label">30天读者</div></div>
+      <div class="kpi"><div class="kpi-num">${esc(o.publishedCount??'--')}<span style="font-size:12px;color:var(--dim)">/${esc(o.pendingDrafts??'--')}</span></div><div class="kpi-label">已发布/待发布</div></div>
+    </div>
+    ${(d.latestArticle?`<div class="li"><div class="li-t">📄 最新：${esc(d.latestArticle.title)}</div><div class="li-m">${esc(d.latestArticle.date)} · ${esc(d.latestArticle.outcome)}</div></div>`:'')}
+    ${(d.topArticles&&d.topArticles.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">近30天 Top</div>${d.topArticles.slice(0,3).map((a,i)=>`<div class="li-m">${i+1}. ${a.reads??'--'} 阅读 · ${esc(a.title)}</div>`).join('')}`:''}
+    ${(d.problems&&d.problems.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">主要问题</div>${d.problems.map(p=>`<div class="li"><div class="li-m"><span class="badge ${p.level==='critical'?'b-crit':p.level==='warning'?'b-warn':'b-info'}">${esc(p.level)}</span> ${esc(p.title)}</div></div>`).join('')}`:''}
+    ${(d.followUps&&d.followUps.length)?`<div class="card-h" style="font-size:12px;margin-top:10px">需持续关注</div><div class="li-m">${esc(d.followUps.join(' · '))}</div>`:''}
+  </div>`;
 }
 
-// ── Recent posts ──
-function renderRecentPosts(){
-  const ph=(D.publishHistory||[]).slice(0,5);let html='';
-  ph.reverse().forEach(p=>{const wOk=p.outcome==='PUBLISHED',dOk=p.draftAllPass;
-    html+=`<div class="item"><div class="item-main"><div class="item-date">${fmtDate(p.date)}</div><div class="item-title">${esc(p.title||'')}</div><div class="item-tags">${mkBadge(wOk,'Web '+(wOk?'OK':'FAIL'))}${mkBadge(dOk,'Draft '+(dOk?'OK':'FAIL'))}</div></div></div>`;});
-  document.getElementById('recentPosts').innerHTML=html||'<div class="empty"><p>暂无发布记录</p></div>';
+/* ═══ 7b 数据更新记录 ═══ */
+function renderUpdateLog(){
+  const log=D.dataUpdateLog||[];
+  let html=`
+  ${card('数据更新记录','真实执行台账 · 看板只查看，不启动/暂停/重试任务', log.length?`最近 ${log.length} 条`:'')}
+  ${log.length?`
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>日期</th><th>计划</th><th>实际执行</th><th>采集</th><th>校验</th><th>云同步</th><th>耗时</th><th>异常</th></tr></thead><tbody>
+    ${log.map(x=>{ const v=typeof x.validate_result==='string'?x.validate_result:(x.validate_result?.reason||''); 
+      return `<tr>
+        <td>${esc(x.date||'--')}</td>
+        <td class="muted">${esc(x.planned||'09:00')}</td>
+        <td class="muted">${x.executed_at?fmtDt(x.executed_at):'--'}</td>
+        <td><span class="badge ${x.collect_result==='成功'?'b-ok':'b-crit'}">${esc(x.collect_result||'--')}</span></td>
+        <td class="muted" style="max-width:220px">${esc(v)}</td>
+        <td class="muted">${esc(x.cloud_sync||'--')}</td>
+        <td class="muted">${x.duration_ms!=null?x.duration_ms+'ms':'--'}</td>
+        <td class="muted" style="max-width:160px;color:${x.error_reason?'var(--crit)':'inherit'}">${x.error_reason?esc(x.error_reason):'—'}</td>
+      </tr>`; }).join('')}
+  </tbody></table></div>
+  <div class="note">每日 09:00 主采集 / 12:00 检查补采 / 23:00 工作进度更新；登录态过期时提示重新扫码并补采。看板仅展示真实执行记录。</div>`:emptyState('暂无数据更新记录，等待首次自动采集')}
+  `;
+  document.getElementById('page-update').innerHTML=html;
 }
 
-// ── Alerts ──
-function renderAlerts(){
-  const arr=D.alerts||[];const card=document.getElementById('alertCard');
-  document.getElementById('alertCount').textContent=arr.length;
-  if(!arr.length){card.style.display='none';return;}card.style.display='block';
-  let html='';arr.forEach(a=>{const msg=a.message||a.file||JSON.stringify(a).slice(0,120);
-    html+=`<div class="alert-item" style="padding:12px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;margin-bottom:8px"><div style="font-size:11px;color:#ef4444;margin-bottom:4px">${a.date}</div><div style="font-size:12px;color:#b91c1c;line-height:1.5">${esc(msg)}</div></div>`;});
-  document.getElementById('alertList').innerHTML=html;
+
+/* ═══ V6 经营日历（按日聚合真实归档，状态由真实回执判定；无事件≠已完成，不自动推断）═══ */
+function renderCalendar(){
+  const cal=D.opsCalendar||[];
+  const stBadge=s=>{
+    if(s.includes('周度复盘日')) return '<span class="badge b-info">复盘日</span>';
+    if(s==='正常完成') return '<span class="badge b-ok">正常完成</span>';
+    if(s==='部分完成') return '<span class="badge b-info">部分完成</span>';
+    if(s==='执行失败') return '<span class="badge b-crit">执行失败</span>';
+    if(s==='等待执行') return '<span class="badge b-mute">等待执行</span>';
+    return '<span class="badge b-mute">无数据</span>';
+  };
+  const evIcon={article:'📄',draft:'📝',brief:'📊',weekly_review:'📈',snapshot:'📷',incident:'⚠️',milestone:'⭐',growth:'👤',data:'🗂️'};
+  let html=`
+  ${card('经营日历',cal.length?`共 ${cal.length} 个有记录日期`:'','点击日期查看当日经营档案')}
+  <div class="note" style="margin-bottom:10px">状态基于真实归档回执（发布/草稿/简报/复盘/快照/拦截）判定，<b>不根据日期自动推断已完成</b>。周度复盘日与重要经营事件用不同标识。</div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>日期</th><th>状态</th><th>发布</th><th>草稿</th><th>事件</th></tr></thead><tbody>
+    ${cal.map(c=>{
+      const d=c.detail||{};
+      const evs=(c.events||[]).slice(0,4).map(e=>`${evIcon[e.type]||'·'} ${esc(e.title)}`).join('<br>')||'—';
+      return `<tr onclick="calPick('${c.date}')" style="cursor:pointer">
+        <td><b>${esc(c.date)}</b> ${c.isWeeklyReviewDay?'<span class="badge b-info">周日复盘</span>':''}</td>
+        <td>${stBadge(c.status)}</td>
+        <td>${d.published?d.published+' 篇':'—'}</td>
+        <td>${d.drafts?d.drafts+' 篇':'—'}</td>
+        <td class="muted" style="max-width:300px">${evs}</td>
+      </tr>`;}).join('') || '<tr><td colspan="5" class="muted">暂无经营日历记录</td></tr>'}
+  </tbody></table></div>
+  <div id="calDetail"></div>`;
+  document.getElementById('page-calendar').innerHTML=html;
+  window.calPick=(date)=>{
+    const c=(D.opsCalendar||[]).find(x=>x.date===date); if(!c)return;
+    const d=c.detail||{};
+    const evs=(c.events||[]).map(e=>`<div class="li"><div class="li-t">${evIcon[e.type]||'·'} ${esc(e.title)}</div>${e.detail?`<div class="li-m">${esc(e.detail)}</div>`:''}</div>`).join('')||'<div class="empty">当日无事件记录</div>';
+    document.getElementById('calDetail').innerHTML=`
+    ${card('当日经营档案 · '+esc(date),'状态：'+esc(c.status),'')}
+    <div class="grid4" style="margin-bottom:10px">
+      <div class="kpi"><div class="kpi-num">${d.published?d.published:0}</div><div class="kpi-label">发布文章</div></div>
+      <div class="kpi"><div class="kpi-num">${d.drafts?d.drafts:0}</div><div class="kpi-label">制作草稿</div></div>
+      <div class="kpi"><div class="kpi-num">${d.brief?'✓':'—'}</div><div class="kpi-label">每日简报</div></div>
+      <div class="kpi"><div class="kpi-num">${d.snapshot?'✓':'—'}</div><div class="kpi-label">数据快照</div></div>
+    </div>
+    ${(d.incidents&&d.incidents.length)?`<div class="card-h" style="font-size:12px">当日异常</div>${d.incidents.map(x=>`<div class="li"><div class="li-t">⚠️ ${esc(x.title)}</div><div class="li-m">${esc(x.detail||'')}</div></div>`).join('')}`:''}
+    <div class="card-h" style="font-size:12px">当日事件明细</div>
+    ${evs}
+    <div class="note" style="margin-top:10px">周度复盘日：${c.isWeeklyReviewDay?'是':'否'} · 第 ${c.week} 周 · ${esc(c.year||'')} 年 ${esc(c.month||'')} 月。仅展示可追溯真实记录，缺失项不编造。</div>`;
+    document.getElementById('calDetail').scrollIntoView({behavior:'smooth',block:'start'});
+  };
 }
 
-// ── Topics ──
-function renderTopics(){
-  const topics=D.topics||[];
-  const stMap={planning:'规划中',writing:'写作中',review:'审核中',done:'已完成'};
-  const stCls={planning:'tag-draft',writing:'tag-cat',review:'tag-web',done:'tag-web'};
-  let html='';topics.forEach(t=>{
-    html+=`<div class="item" style="display:flex;justify-content:space-between;align-items:center">
-      <div class="item-main"><div class="item-title">${esc(t.title)}</div>
-      <div class="item-tags"><span class="tag ${stCls[t.status]||'tag-draft'}">${stMap[t.status]||t.status}</span>${t.category?mkTag('tag-cat',t.category):''}${t.date?`<span style="font-size:10px;color:var(--dim);margin-left:4px">${fmtDate(t.date)}</span>`:''}</div>
-      </div><button onclick="editTopic(${t.id})" style="background:transparent;border:1px solid var(--border);color:var(--sub);padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;flex-shrink:0;margin-left:8px">编辑</button>
-    </div>`;});
-  document.getElementById('topicsList').innerHTML=html||'<div class="empty"><p>暂无选题</p></div>';
-}
-function showTopicModal(id){editingId=id||null;document.getElementById('modalTitle').textContent=id?'编辑选题':'新建选题';
-  if(id){const t=(D.topics||[]).find(x=>x.id===id);if(t){document.getElementById('topicInput').value=t.title||'';document.getElementById('topicCat').value=t.category||'ai-discovery';document.getElementById('topicStatus').value=t.status||'planning';}}
-  else{document.getElementById('topicInput').value='';document.getElementById('topicCat').value='ai-discovery';document.getElementById('topicStatus').value='planning';}
-  document.getElementById('topicModal').classList.add('show');
-}
-function closeTopicModal(){document.getElementById('topicModal').classList.remove('show');editingId=null;}
-function saveTopic(){const title=document.getElementById('topicInput').value.trim();if(!title){alert('请输入标题');return;}
-  const cat=document.getElementById('topicCat').value,stat=document.getElementById('topicStatus').value;
-  if(editingId){const idx=(D.topics||[]).findIndex(t=>t.id===editingId);if(idx>=0)D.topics[idx]={...D.topics[idx],title,category:cat,status:stat};}
-  else{(D.topics||[]).push({id:(D.topics||[]).reduce((m,t)=>Math.max(m,t.id),0)+1,title,category:cat,status:stat});}
-  closeTopicModal();renderTopics();
-}
-function editTopic(id){showTopicModal(id);}
+/* ═══ V6 经营实验 + 经验沉淀（只提取真实决议/验收记录；证据不足标待验证，不保存AI推测）═══ */
+function renderExperiment(){
+  const exp=D.experiments||[];
+  const ex=D.experiences||{};
+  const badge=v=>v==='验证有效'?'b-ok':v==='验证无效'?'b-crit':v==='证据不足'?'b-warn':'b-info';
+  let html=`
+  ${card('经营策略实验档案','由 WorkBuddy 设计 · 看板仅展示 · 样本不足标"证据不足"', exp.length?`共 ${exp.length} 项`:'')}
+  ${exp.length?exp.map(x=>`<div class="li">
+    <div class="li-t"><span style="font-family:monospace;color:var(--dim);font-size:11px">${esc(x.expNo)}</span> ${esc(x.name)} <span class="badge ${badge(x.result)}">${esc(x.result)}</span></div>
+    <div class="li-m">目的：${esc(x.purpose)}</div>
+    <div class="li-m">假设：${esc(x.hypothesis)}</div>
+    <div class="li-m">数据依据：${esc(x.dataBasis)} · 对照：${esc(x.controlNote)}</div>
+    <div class="li-m">测试内容：${esc(x.testContent)} · 周期：${esc(x.period)}</div>
+    <div class="li-m">验证指标：${esc(x.verifyMetric)} · 关联决议：${esc(x.relatedResolution)}</div>
+    <div class="li-m">结论：${esc(x.conclusion)} → 后续：${esc(x.nextAction)}</div>
+  </div>`).join(''):emptyState('暂无经营实验。实验由 WorkBuddy 在周度决议"新增尝试"中提出，看板据此建立档案；样本不足时标记证据不足，不强行下结论。')}
+  <div class="note">当前公众号数据样本较少，优先做低成本、小范围、可持续验证的实验；尽量减少同时改变多个变量。经营指挥中心只展示实验，不负责执行。</div>
 
-// ── Kanban ──
-function renderKanban(){
-  const kb=D.kanban||{};
-  [['planning','col-plan','cnt-plan'],['writing','col-write','cnt-write'],['review','col-review','cnt-review'],['published','col-pub','cnt-pub']].forEach(([key,colId,cntId])=>{
-    const items=kb[key]||[];document.getElementById(cntId).textContent=items.length;
-    let html='';items.forEach(it=>{html+=`<div class="k-card"><div class="k-title">${esc(it.title||'未命名')}</div><div class="k-meta"><span>${fmtDate(it.date)}</span>${it.category?mkTag('tag-cat',it.category):''}</div></div>`;});
-    document.getElementById(colId).innerHTML=html||'<div style="text-align:center;padding:20px;font-size:11px;color:var(--dim)">暂无</div>';
-  });
+  ${card('经营经验与知识沉淀','可追溯至决议/验收记录 · 不保存AI推测','')}
+  <div class="card-h" style="font-size:12px">✅ 已验证有效（${(ex.verified_valid||[]).length}）</div>
+  ${(ex.verified_valid||[]).length?(ex.verified_valid||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 源自 ${esc(r.period)} ${esc(r.expNo)}</div></div>`).join(''):emptyState('暂无已验证有效经验（证据不足不入库）')}
+  <div class="card-h" style="font-size:12px;margin-top:10px">⛔ 已验证无效（${(ex.verified_invalid||[]).length}）</div>
+  ${(ex.verified_invalid||[]).length?(ex.verified_invalid||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 不建议重复执行 · 源自 ${esc(r.period)}</div></div>`).join(''):emptyState('暂无已验证无效记录')}
+  <div class="card-h" style="font-size:12px;margin-top:10px">🔍 待验证（${(ex.pending||[]).length}）</div>
+  ${(ex.pending||[]).length?(ex.pending||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 标记：${esc(r.verdict)} · 源自 ${esc(r.period)}</div></div>`).join(''):emptyState('暂无待验证经验')}
+  ${(ex.strategy_versions||[]).length?`<div class="card-h" style="font-size:12px;margin-top:10px">📚 经营策略版本档案</div>${ex.strategy_versions.map(v=>`<div class="li-m">${esc(v.period||v.from_period)} · ${esc(v.summary||'')}</div>`).join('')}`:''}
+  <div class="note">所有经营经验均可追溯至对应决议/验收/数据记录；AI 推测不直接保存为已验证经验。</div>`;
+  document.getElementById('page-experiment').innerHTML=html;
 }
 
-// ── Articles ──
-function renderArticles(search=''){
-  const cat=document.getElementById('catFilter')?.value||'';let arts=D.articles||[];
-  if(search)arts=arts.filter(a=>a.title.includes(search));if(cat)arts=arts.filter(a=>a.category===cat);
-  let html='';arts.forEach(a=>{
-    const wOk=a.webStatus==='PUBLISHED',dOk=a.draftStatus==='UPLOADED_VERIFIED';
-    const pv=a.sitePV!==null&&a.sitePV!==undefined?a.sitePV:'-',reads=a.wechatReads!==null&&a.wechatReads!==undefined?a.wechatReads:'-',shares=a.shares!==null&&a.shares!==undefined?a.shares:'-';
-    html+=`<tr><td style="color:var(--dim);white-space:nowrap">${fmtDate(a.date)}</td><td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px">${esc(a.title)}</td><td>${a.category?mkTag('tag-cat',a.category):''}</td><td>${mkBadge(wOk,'✅')}</td><td>${mkBadge(dOk,'✅')}</td><td style="font-size:11px;color:var(--sub)">${pv!=='-'?pv+'PV':'--'} / ${reads!=='-'?reads+'R':'--'}</td><td style="font-size:11px;color:var(--sub)">${shares!=='-'?shares:''}</td><td><a class="tbl-link" href="${a.websiteUrl}" target="_blank">查看 →</a></td></tr>`;
-  });
-  document.getElementById('articlesBody').innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:20px">暂无文章</td></tr>';
+/* ═══ 7 经营档案 ═══ */
+function renderArchive(){
+  const ar=D.archives||[];
+  const tcls={milestone:'里程碑',growth:'粉丝增长',incident:'故障',data:'数据',report:'报告'};
+  let html=`
+  ${card('经营档案中心','经营时间轴 · 仅记录真实发生的事件，不自动编造')}
+  ${ar.length?`<div class="tl">${ar.map(a=>`<div class="tl-i ${esc(a.type)}"><div class="tl-d">${esc(a.date)} · ${tcls[a.type]||esc(a.type)}</div><div class="tl-t">${esc(a.title)}</div>${a.detail?`<div class="li-m">${esc(a.detail)}</div>`:''}</div>`).join('')}</div>`:emptyState('暂无真实档案记录')}
+  <div class="note">档案仅收录可追溯的真实事件（快照、复盘、故障、里程碑）。未发现的事件不编造。</div>`;
+  document.getElementById('page-archive').innerHTML=html;
 }
 
-// ── Drafts ──
-function renderDrafts(){
-  const drafts=D.drafts||[];document.getElementById('draftCount').textContent=drafts.length;
-  let html='';drafts.forEach(d=>{const imgOk=d.actualImages>=d.expectedImages;
-    html+=`<div class="item"><div class="item-main"><div class="item-date">${d.date}${d.verifiedAt?' · '+fmtDt(d.verifiedAt):''}</div><div class="item-title">${esc(d.title)}</div><div class="item-tags"><span class="tag tag-draft">SHA ${d.sha256?.slice(0,6)||'?'}</span>${mkBadge(imgOk,d.actualImages+'/'+d.expectedImages+'图')}</div></div></div>`;});
-  document.getElementById('draftsList').innerHTML=html||'<div class="empty"><p>暂无待发布草稿 🎉</p></div>';
-  const assets=D.assets?.names||['news_cover','body_01','body_02','toolbox_footer','newspic_cover','pic_02','pic_03','pic_04'];
-  const lastDay=D.assets?.lastDraft?.date||null;
-  const dftForDay=lastDay?(D.drafts||[]).find(d=>d.date===lastDay):null;
-  let aHtml='<div class="asset-grid">';assets.forEach(a=>{const has=dftForDay?(dftForDay.actualImages>=1):false;aHtml+=`<div class="asset-cell ${has?'ok':'miss'}">${a}</div>`;});aHtml+='</div>';
-  if(dftForDay)aHtml+=`<div style="font-size:11px;color:var(--sub);margin-top:8px">参考 ${dftForDay.date}：${dftForDay.actualImages}/${dftForDay.expectedImages} 图已上传</div>`;
-  document.getElementById('assetGrid').innerHTML=aHtml;
+/* ═══ 8 系统监控 ═══ */
+function renderSystem(){
+  const s=D.systemStatus||{}; const ds=D.dataStates||{};
+  const lvb=l=>`<span class="badge ${l==='过期'?'b-warn':'b-ok'}">${esc(l)}</span>`;
+  let html=`
+  ${card('系统运行监控','真实运行状态，非静态文字')}
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>项</th><th>状态</th><th>时间 / 值</th></tr></thead><tbody>
+    <tr><td>系统版本</td><td><span class="badge b-info">${esc(s.version||'V6.0')}</span></td><td class="muted">经营监督与决议追踪中心</td></tr>
+    <tr><td>本地服务</td><td>${lvb(s.localService==='RUNNING'?'正常':'异常')}</td><td class="muted">${esc(s.localService||'--')}</td></tr>
+    <tr><td>云端服务</td><td>${lvb(s.cloudService==='ONLINE'?'正常':'异常')}</td><td class="muted">wechat-ops-center.vercel.app</td></tr>
+    <tr><td>微信登录态</td><td>${lvb(s.wxLogin==='LOGGED_IN'?'正常':'异常')}</td><td class="muted">${esc(s.wxLogin)}</td></tr>
+    <tr><td>最近数据采集</td><td>${lvb(s.dataFreshness)}</td><td class="muted">${s.lastDataCapture?fmtDt(s.lastDataCapture):'--'}（${s.dataAgeHours!=null?s.dataAgeHours+'h 前':'--'}）</td></tr>
+    <tr><td>数据版本</td><td><span class="badge b-mute">快照</span></td><td class="muted" style="font-family:monospace;font-size:11px">${esc(s.dataVersion)}</td></tr>
+    <tr><td>最近报告</td><td><span class="badge b-mute">已生成</span></td><td class="muted">${esc(s.lastReport)}</td></tr>
+    <tr><td>最近同步</td><td><span class="badge b-mute">记录</span></td><td class="muted">${s.lastSync?fmtDt(s.lastSync):'--'}</td></tr>
+    <tr><td>数据完整性</td><td>${lvb(s.integrity==='完整'?'正常':'异常')}</td><td class="muted">${esc(s.integrity)}</td></tr>
+  </tbody></table></div>
+
+  ${card('风险预警中心','经营风险以 WorkBuddy 分析为准，技术异常按真实记录展示')}
+  ${(D.risks||[]).length?(D.risks||[]).map(r=>`<div class="risk ${esc(r.level)}">
+    <div class="risk-t">${esc(r.title)} <span class="badge ${r.level==='critical'?'b-crit':r.level==='warning'?'b-warn':'b-info'}">${{critical:'严重',warning:'警告',info:'提示'}[r.level]||r.level}</span></div>
+    <div class="risk-m">${esc(r.desc)}</div>
+    <div class="risk-s">影响：${esc(r.scope||'--')} · 状态：${esc(r.status)}${r.since?' · 起于 '+fmtDt(r.since):''}</div>
+  </div>`).join(''):emptyState('暂无风险预警')}
+
+  ${card('数据状态分级','区分真实值 / 缺失状态，禁止虚构')}
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>指标</th><th>值</th><th>状态</th><th>来源</th><th>截至</th></tr></thead><tbody>
+    ${['followers','readers30d','revenue','wxLogin','sync'].map(k=>{ const x=ds[k]||{};
+      const v = k==='revenue' ? (x.value==null?'未接入':x.value) : (k==='sync'?fmtDt(x.value):x.value);
+      return `<tr><td>${esc(k)}</td><td><b>${v??'--'}</b></td><td>${stateBadge(x.state)}</td><td class="muted">${esc(x.source||'--')}</td><td class="muted">${x.asOf?fmtDt(x.asOf):'--'}</td></tr>`;}).join('')}
+  </tbody></table></div>`;
+  document.getElementById('page-system').innerHTML=html;
 }
 
-// ── Publish ──
-function renderPublish(){
-  const ph=D.publishHistory||[];let html='';
-  ph.forEach(p=>{const wOk=p.outcome==='PUBLISHED',dOk=p.draftAllPass;
-    html+=`<tr><td style="color:var(--dim);white-space:nowrap">${fmtDate(p.date)}</td><td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px">${esc(p.title||'')}</td><td style="color:var(--sub);font-size:11px">${p.guideId??'-'}</td><td>${mkBadge(wOk,'✅')}</td><td>${mkBadge(dOk,'✅')}</td><td style="font-size:11px;color:var(--sub)">${p.images??'-'}</td></tr>`;});
-  document.getElementById('pubBody').innerHTML=html||'<tr><td colspan="6" style="text-align:center;color:var(--dim)">暂无记录</td></tr>';
-  const cats=D.categories||[];let cHtml='';cats.forEach(c=>{
-    cHtml+=`<tr><td>${mkTag('tag-cat',c.name)}</td><td>${c.total}</td><td>${c.published}</td><td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#E2E8F0;border-radius:3px"><div style="width:${c.rate}%;height:100%;background:var(--grad);border-radius:3px"></div></div><span style="font-size:11px;color:var(--sub)">${c.rate}%</span></div></td></tr>`;});
-  document.getElementById('statsBody').innerHTML=cHtml||'<tr><td colspan="4" style="text-align:center;color:var(--dim)">暂无数据</td></tr>';
-  const als=D.alerts||[];let aHtml='';als.forEach(a=>{const msg=a.message||a.file||JSON.stringify(a).slice(0,120);aHtml+=`<div style="padding:12px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;margin-bottom:8px"><div style="font-size:11px;color:#ef4444;margin-bottom:4px">${a.date}</div><div style="font-size:12px;color:#b91c1c;line-height:1.5">${esc(msg)}</div></div>`;});
-  document.getElementById('alertsBody').innerHTML=aHtml||'<div class="empty"><p>暂无历史告警</p></div>';
-}
-function switchPubTab(tab,btn){document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
-  document.getElementById('pubHistoryPanel').style.display=tab==='history'?'block':'none';
-  document.getElementById('pubStatsPanel').style.display=tab==='stats'?'block':'none';
-  document.getElementById('pubAlertsPanel').style.display=tab==='alerts'?'block':'none';}
+/* ═══ 9 外观设置 ═══ */
+function renderThemePanel(){
+  const th=getTheme();
+  let html=`
+  ${card('主题模式','浅色 / 深色 / 跟随系统 / 自定义','自动保存，刷新保留')}
+  <div class="tg">
+    ${['light','dark','auto','custom'].map(m=>`<button class="${th.mode===m?'on':''}" onclick="setMode('${m}')">${{light:'浅色',dark:'深色',auto:'跟随系统',custom:'自定义'}[m]}</button>`).join('')}
+  </div>
 
-window.addEventListener('resize',()=>{if(D.trend)drawReadChart();if(D.userTrend)drawUserChart();});
-fetchData();setInterval(fetchData,90000);
+  ${card('预设主题','点击即应用')}
+  <div class="preset" id="presetBox">${Object.keys(PRESETS).map(n=>`<button class="${th.preset===n?'on':''}" onclick="applyPreset('${n}');renderThemePanel();">
+    <div class="sw"><i style="background:${PRESETS[n].bg}"></i><i style="background:${PRESETS[n].card}"></i><i style="background:${PRESETS[n].brand}"></i></div>${n}
+  </button>`).join('')}</div>
+
+  ${card('自定义颜色','即时预览，自动保证文字对比度')}
+  ${['pageBg','card','nav','accent'].map(f=>{ const names={pageBg:'页面背景',card:'卡片背景',nav:'导航栏',accent:'强调色'}; const cur=(th.custom||{})[f]||{pageBg:'#F4F7FB',card:'#FFFFFF',nav:'#FFFFFF',accent:'#1168b7'}[f];
+    return `<div class="colorrow"><label>${names[f]}</label><span class="hex" id="hex-${f}">${cur}</span><input type="color" value="${cur}" onchange="customColor('${f}',this.value);renderThemePanel();"></div>`;}).join('')}
+  <div style="margin-top:14px"><button class="tab active" style="cursor:pointer" onclick="resetTheme()">↺ 恢复默认主题</button></div>
+
+  <div class="note" style="margin-top:14px">外观偏好保存在浏览器 localStorage（<code>v5_ops_theme</code>），刷新/重开浏览器保留，不影响任何经营数据。已同步到本地看板与云端固定网址。</div>`;
+  document.getElementById('page-theme').innerHTML=html;
+}
+function setMode(m){ if(m==='auto'){ modeToSystem(); } else { applyThemeMode(m); clearCustom(); getTheme().custom={}; saveTheme({mode:m,preset:null,custom:{}}); } renderThemePanel(); }
+function resetTheme(){ clearCustom(); document.documentElement.removeAttribute('data-theme'); localStorage.removeItem(THEME_KEY); document.body.setAttribute('data-mode','light'); renderThemePanel(); }
+function markPreset(name){ document.querySelectorAll('#presetBox button').forEach(b=>b.classList.remove('on')); if(name)document.querySelectorAll('#presetBox button').forEach(b=>{if(b.textContent.includes(name))b.classList.add('on');}); }
+
+/* ═══ 图表 ═══ */
+function lineChart(id,labels,vals,color){
+  const c=document.getElementById(id); if(!c)return;
+  const W=c.parentElement.clientWidth,H=180; c.width=W*2;c.height=H*2;c.style.width=W+'px';c.style.height=H+'px';
+  const ctx=c.getContext('2d'); ctx.scale(2,2);
+  const pad={t:20,r:14,b:24,l:38},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const max=Math.max(...vals,1)*1.15, min=0;
+  const xs=i=>pad.l+(vals.length>1?i/(vals.length-1)*cw:cw/2);
+  const ys=v=>pad.t+ch-((v-min)/(max-min||1))*ch;
+  ctx.font='10px sans-serif'; ctx.fillStyle='#94A3B8';
+  for(let g=0;g<=4;g++){ const y=pad.t+ch-g/4*ch; ctx.strokeStyle=getComputedStyle(document.body).getPropertyValue('--border'); ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke(); ctx.fillText(Math.round(max*g/4),4,y+3); }
+  ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+  vals.forEach((v,i)=>{ const x=xs(i),y=ys(v); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+  ctx.fillStyle=color; vals.forEach((v,i)=>{ ctx.beginPath();ctx.arc(xs(i),ys(v),3,0,7);ctx.fill(); });
+  const lb=document.getElementById(id+'Labels');
+  if(lb) lb.innerHTML=labels.map(l=>`<span>${l}</span>`).join('');
+}
+function drawTrend(){ const d=D.trend||[]; if(!d.length)return;
+  lineChart('trendChart', d.map(x=>x.date), d.map(x=>x.total||0), getComputedStyle(document.documentElement).getPropertyValue('--c1')); }
+function drawUserChart(){ const d=(D.userTrend||[]); if(!d.length)return;
+  lineChart('userChart', d.map(x=>x.date), d.map(x=>x.total), getComputedStyle(document.documentElement).getPropertyValue('--c2')); }
+function drawChannelChart(){ const c=document.getElementById('chanChart'); if(!c)return;
+  const W=c.parentElement.clientWidth,H=40; c.width=W*2;c.height=H*2;c.style.width=W+'px';c.style.height=H+'px';
+  const ctx=c.getContext('2d'); ctx.scale(2,2);
+  const ch=D.wrChannels||{}; const cols=getComputedStyle(document.documentElement);
+  const palette=[cols.getPropertyValue('--c1'),cols.getPropertyValue('--c2'),cols.getPropertyValue('--c3'),cols.getPropertyValue('--c4'),cols.getPropertyValue('--c5')];
+  const total=Object.values(ch).reduce((s,v)=>s+(+v||0),0)||1; let x=0;
+  Object.entries(ch).forEach(([k,v],i)=>{ const w=(+v||0)/total*W; ctx.fillStyle=palette[i%palette.length]; ctx.fillRect(x,0,w,H);
+    if(w>34){ ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.fillText(k+' '+(+v||0)+'%',x+6,H/2+4);} x+=w; });
+  // 图例
+  const ly=H; ctx.font='10px sans-serif';
+  Object.entries(ch).forEach(([k,v],i)=>{ ctx.fillStyle=palette[i%palette.length]; ctx.fillRect(0,ly,10,10); ctx.fillStyle=cols.getPropertyValue('--body'); ctx.fillText(k,14,ly+9); });
+}
+
+/* ── 渲染总入口 ── */
+function renderAll(){
+  if(D.account) document.getElementById('accountName').textContent=D.account+' · 内容运营中心';
+  document.getElementById('lastUpdated').textContent='数据更新 '+fmtDt(D.generated_at);
+  renderOverview(); renderData(); renderContent(); renderWork();
+  renderRevenue(); renderStrategy(); renderResolution(); renderBrief();
+  renderCalendar(); renderExperiment();
+  renderArchive(); renderUpdateLog(); renderSystem(); renderThemePanel();
+  showPage('overview');
+}
+
+/* ── 时钟 ── */
+function tick(){ const n=new Date(); const el=document.getElementById('clockDisplay'); if(el)el.textContent=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0'); }
+
+/* ── 历史报告（从 weekly_review 目录读取，可选）── */
+let REVIEWS=[];
+async function loadReviews(){
+  try{
+    const base = location.protocol==='file:'?'':'/';
+    const r=await fetch(base+'api/reviews',{cache:'no-store'});
+    if(r.ok){ REVIEWS=(await r.json()).reviews||[]; }
+  }catch(e){ /* 无该端点则跳过，复盘区显示暂无 */ }
+}
+
+/* ── 启动 ── */
+buildTabs();
+initTheme();
+setInterval(tick,30000); tick();
+loadReviews().then(()=>{ fetchData(); });
+document.getElementById('refreshBtn').onclick=fetchData;
+window.addEventListener('resize',()=>{ if(D.trend)drawTrend(); if(D.userTrend)drawUserChart(); if(D.wrChannels)drawChannelChart(); });
 </script>
 </body>
 </html>
