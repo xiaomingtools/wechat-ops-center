@@ -120,13 +120,17 @@ function collect() {
   const todayEntry  = findEntry(today);
   const tmrwEntry   = findEntry(tomorrow);
 
-  // 每日阅读趋势（周报+快照交叉验证）
-  const trendDays = [
-    { date: '11-02', reads: 23 }, { date: '11-03', reads: 21 },
-    { date: '11-04', reads: 12 }, { date: '11-05', reads: 7  },
-    { date: '11-06', reads: 10 }, { date: '11-07', reads: 13 },
-    { date: '11-08', reads: 33 },
-  ];
+  // 近 7 天趋势（真实后台 user_analysis_daily，无真实数据则返回空，不虚构）
+  // 注意：后台未提供"逐日阅读"字段，逐日可得的是粉丝(new/lost/total/net)，
+  //       因此趋势图展示真实可得的粉丝逐日数据并如实标注来源；不伪造阅读曲线。
+  const trendDays = wxUserDaily.slice(-7).map(u => ({
+    date: u.date ? u.date.slice(5) : '',
+    total: u.total || 0,
+    new: u.new || 0,
+    lost: u.lost || 0,
+    net: u.net || 0,
+  }));
+  const trendSource = trendDays.length ? '后台 user_analysis_daily（真实逐日粉丝）' : '暂无真实逐日数据';
 
   const userTrend = wxUserDaily.slice(-14).map(u => ({
     date: u.date.slice(5), total: u.total, new: u.new, lost: u.lost,
@@ -233,26 +237,22 @@ function collect() {
   strategies.push({ icon: '🚀', title: '突破粉丝瓶颈', desc: `当前仅 ${followers} 人，建议在每篇文章末尾增加引导关注的互动话术` });
   strategies.push({ icon: '⏰', title: '最佳发布时间参考', desc: '周二至周四上午 8:00-9:00 是公众号打开高峰，重磅内容安排在此时段群发' });
 
-  // 年度计划推算（基于现有趋势）
+  // 年度/阶段经营目标推算（真实进度 + WorkBuddy 目标说明；不擅自设无依据门槛，不写死假数字）
+  // followerTarget 来自 follower_watch.json（真实内部目标）；目标数值与完成时间由 WorkBuddy 依据
+  // 真实经营情况制定，看板仅展示。actual 一律用真实 publishedCount/followers 计算，缺失为 null，不虚构。
   const annualPlan = {
-    targetFollowers: 500,
-    targetArticles: 365,
+    targetFollowers: followerTarget,                       // 真实内部目标（follower_watch.threshold），非官方门槛
+    targetArticles: publishedCount,                         // 真实已发布篇数（展示用）
+    goalNote: '阶段目标与完成时间由 WorkBuddy 依据真实经营情况制定，看板仅展示；未设无依据的粉丝门槛/盈利目标',
     currentProgress: {
       followers: followers,
       articles: publishedCount,
-      pct: Math.round(publishedCount / 365 * 100),
+      pct: followerTarget > 0 ? Math.min(100, Math.round(followers / followerTarget * 100)) : 0,
     },
-    monthlyTargets: [
-      { month: '11月', goal: '100', actual: '11', note: '粉丝突破关键期' },
-      { month: '12月', goal: '150', actual: '—', note: '冲刺双位数目标' },
-      { month: 'Q1', goal: '300', actual: '—', note: '季度粉丝翻倍' },
-      { month: '全年', goal: '500', actual: publishedCount + '篇', note: '日更不间断' },
-    ],
+    monthlyTargets: [],   // 由 WorkBuddy 提供后填入；无真实目标数据时保持空，不写死假 actual
     keyMilestones: [
-      { date: '2026-12', milestone: '粉丝破50人', status: '进行中' },
-      { date: '2027-02', milestone: '单篇阅读破100', status: '目标' },
-      { date: '2027-03', milestone: '粉丝破200人', status: '目标' },
-      { date: '2027-06', milestone: '粉丝破500人', status: '目标' },
+      { date: '粉丝达 100', milestone: '可开通返佣商品/短剧推广（微信官方门槛）', status: followers >= 100 ? '已达成' : '进行中' },
+      { date: '粉丝达 500', milestone: '可开通程序化广告（流量主核心收益，微信官方门槛）', status: followers >= 500 ? '已达成' : '进行中' },
     ],
   };
 
@@ -405,7 +405,7 @@ function collect() {
   const dataAgeH = hoursAgo(lastSnapCapture || follower.checked_at);
   const dataStale = dataAgeH === null ? '未知' : (dataAgeH > 48 ? '过期' : '正常');
   const systemStatus = {
-    version: 'V5.0',
+    version: 'V6.0',
     localService: 'RUNNING',
     cloudService: 'ONLINE',
     dataInterface: 'OK',
@@ -521,6 +521,156 @@ function collect() {
     return '状态未知';
   }
 
+
+  // ── V6.0 经营日历（按日聚合真实归档：web_tutorials / daily_drafts / daily_brief / weekly_review / snapshot / 拦截）
+  //   原则：仅记录真实发生的事件，状态由真实回执判定；"无事件"≠"已完成"，不自动推断。
+  const calByDate = {};
+  const pushCal = (date, type, title, detail) => { if (!date) return; (calByDate[date] = calByDate[date] || []).push({ type, title, detail: detail || '' }); };
+  entries.forEach(e => pushCal(e.business_date, 'article', e.title, `${e.category_code || ''} ${isPublished(webRec[e.business_date], draftMap[e.business_date]) ? '(已发布)' : '(未发布)'}`.trim()));
+  Object.keys(draftMap).forEach(d => pushCal(d, 'draft', `公众号草稿 ${draftMap[d].title || ''}`.trim(), `状态 ${draftMap[d].status || ''}`));
+  dbFiles.forEach(f => pushCal(f.replace('.json', ''), 'brief', '生成每日经营简报'));
+  wrFiles.forEach(f => pushCal(f.replace('.json', ''), 'weekly_review', '生成周度经营复盘'));
+  snapFiles.forEach(f => pushCal(f.replace('snapshot-', '').replace('.json', ''), 'snapshot', '采集公众号后台快照'));
+  blocked.forEach(b => pushCal(b.date, 'incident', b.reason || '发布被拦截', b.file || ''));
+  const weekNum = d => { const x = new Date(d + 'T12:00:00Z'); const day = x.getUTCDay() || 7; const t = new Date(x); t.setUTCDate(t.getUTCDate() + 4 - day); const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return 1 + Math.round((t - y) / (7 * 864e5) - (y.getUTCDay() + 4 - y.getUTCDay()) / 7); };
+  const isSunday = d => new Date(d + 'T12:00:00Z').getUTCDay() === 0;
+  const CAL_TYPES = ['article', 'draft', 'brief', 'weekly_review', 'snapshot', 'incident', 'milestone', 'growth', 'data'];
+  const opsCalendar = Object.keys(calByDate).map(date => {
+    const evts = calByDate[date];
+    const hasPublish = evts.some(x => x.type === 'article' && x.detail.includes('已发布'));
+    const hasDraft = evts.some(x => x.type === 'draft');
+    const hasIncident = evts.some(x => x.type === 'incident');
+    const hasWeekly = evts.some(x => x.type === 'weekly_review');
+    let status = '无数据';
+    if (hasIncident && hasPublish) status = '部分完成';
+    else if (hasIncident) status = '执行失败';
+    else if (hasPublish) status = '正常完成';
+    else if (hasDraft) status = hasWeekly ? '部分完成' : '部分完成';
+    else if (evts.length) status = '部分完成';
+    if (hasWeekly) status = (status === '无数据' ? '' : status + '·') + '周度复盘日';
+    return {
+      date, status,
+      isWeeklyReviewDay: hasWeekly,
+      isSunday: isSunday(date),
+      week: weekNum(date),
+      year: date.slice(0, 4), month: date.slice(5, 7),
+      events: evts,
+      detail: {
+        published: evts.filter(x => x.type === 'article' && x.detail.includes('已发布')).length,
+        drafts: evts.filter(x => x.type === 'draft').length,
+        brief: evts.some(x => x.type === 'brief'),
+        weeklyReview: hasWeekly,
+        snapshot: evts.some(x => x.type === 'snapshot'),
+        incidents: evts.filter(x => x.type === 'incident'),
+      },
+    };
+  }).sort((a, b) => a.date > b.date ? -1 : 1);
+
+  // ── V6.0 文章生命周期档案（基于真实台账 article-performance.csv + 发布回执；历史无分阶段快照的阶段标"待观察"，不虚构）
+  // 匹配规则与现有 articles 映射一致：CSV.publish_date_site === entry.business_date，或标题前缀命中（manifest 无 article_id 字段）
+  const numv = v => { if (v === null || v === undefined || v === '' || String(v).toUpperCase() === 'UNAVAILABLE') return null; const n = Number(v); return isFinite(n) ? n : null; };
+  const findPerf = e => perfRows.find(r =>
+    (r.publish_date_site && r.publish_date_site === e.business_date) ||
+    (e.title && r.title && r.title.trim() && e.title.includes(r.title.trim().slice(0, 6)))
+  ) || {};
+  const pubEntries = entries.filter(e => isPublished(webRec[e.business_date], draftMap[e.business_date]));
+  const readsAll = pubEntries.map(e => numv(findPerf(e).wechat_reads) || 0);
+  const percentile = v => { if (!readsAll.length) return null; const s = readsAll.slice().sort((a, b) => a - b); return Math.round(s.filter(x => x <= v).length / s.length * 100); };
+  const articleLifecycle = pubEntries.map(e => {
+    const perf = findPerf(e);
+    const hasPerf = Object.keys(perf).length > 0;
+    const reads = numv(perf.wechat_reads);
+    const searchR = numv(perf.search_reads), recR = numv(perf.recommend_reads);
+    const follow = numv(perf.wechat_follows_from_article);
+    const st = s => s == null ? '待观察' : `${s}`;
+    const shareR = numv(perf.share_reads), newFollows = numv(perf.new_follows);
+    const tags = [];
+    if ((reads || 0) >= 30) tags.push('高阅读');
+    if ((searchR || 0) > 0) tags.push('高搜索价值');
+    if ((numv(perf.wechat_shares) || 0) > 0) tags.push('高传播');
+    if ((reads || 0) >= 20) tags.push('长尾流量候选');
+    if ((follow || 0) > 0) tags.push('高关注转化');
+    if ((reads || 0) <= 5 && hasPerf) tags.push('表现待观察');
+    return {
+      articleId: e.topic_id || e.business_date, title: e.title, category: e.category_code || '',
+      publishDate: e.business_date,
+      wechatPublishDate: perf.publish_date_wechat || null,
+      readsTotal: reads,
+      hasPerfRecord: hasPerf,
+      shares: numv(perf.wechat_shares),
+      likes: numv(perf.wechat_likes),
+      comments: numv(perf.wechat_comments),
+      searchReads: searchR, recommendReads: recR,
+      shareReads: shareR,
+      followsFromArticle: follow, newFollows,
+      avgReadTime: perf.avg_read_time && perf.avg_read_time !== 'UNAVAILABLE' ? perf.avg_read_time : null,
+      completeRate: numv(perf.complete_rate),
+      // 生命周期分阶段：24h/30d 来自真实台账回填；3/7/90d 历史无逐阶段快照 → 待观察（不虚构）
+      stages: [
+        { label: '发布后24小时', value: st(reads), source: hasPerf ? '真实台账' : '待补采', note: '' },
+        { label: '发布后3天', value: '待观察', source: '无历史分阶段快照', note: '当前数据源不含逐阶段阅读序列，待 Playwright 登录态补采后填充' },
+        { label: '发布后7天', value: '待观察', source: '无历史分阶段快照', note: '' },
+        { label: '发布后30天', value: st(reads), source: hasPerf ? '30天内容分析口径' : '待补采', note: '' },
+        { label: '发布后90天', value: '待观察', source: '暂无数据', note: '' },
+      ],
+      rankPct: percentile(reads || 0),
+      tags,
+    };
+  }).sort((a, b) => (b.readsTotal || 0) - (a.readsTotal || 0));
+  const lifecycleHighlights = {
+    highReads: articleLifecycle.filter(a => (a.readsTotal || 0) >= 30).slice(0, 5),
+    highSearch: articleLifecycle.filter(a => (a.searchReads || 0) > 0).slice(0, 5),
+    highShare: articleLifecycle.filter(a => (a.shares || 0) > 0).slice(0, 5),
+    evergreen: articleLifecycle.filter(a => (a.readsTotal || 0) >= 20 && a.category).slice(0, 5),
+    lowPerform: articleLifecycle.filter(a => (a.readsTotal || 0) <= 5 && a.hasPerfRecord).slice(0, 5),
+    pendingCount: articleLifecycle.filter(a => !a.hasPerfRecord).length,
+    watchNote: '生命周期 3/7/90 天分阶段数据需历史快照支持，当前标注"待观察"，不据此过早判定成功或失败；无台账记录的文章标记为待补采。',
+  };
+
+  // ── V6.0 经营实验档案 + 经验沉淀（只提取真实决议/验收记录，不保存 AI 推测为经验；证据不足标待验证）
+  const experiments = [];
+  const experiences = { verified_valid: [], verified_invalid: [], pending: [], strategy_versions: [] };
+  const wrsAll = loadArchiveList(wrsFiles, wrsDir);
+  wrsAll.forEach(w => {
+    (w.resolutions || []).forEach(r => {
+      if (r.category === '新增尝试') {
+        experiments.push({
+          expNo: r.no, name: r.name, purpose: r.problem || '', hypothesis: r.expectedEffect || '',
+          dataBasis: r.evidence || '', testContent: r.after || '', controlNote: '同期常规内容作为对照',
+          period: r.timing || '', relatedResolution: r.no, verifyMetric: r.acceptanceMetric || '',
+          execRecord: '执行记录由 WorkBuddy 实际生产后回填',
+          result: (w.last_week_acceptance?.items || []).find(i => i.resolutionNo === r.no)?.verdict || '进行中',
+          conclusion: '证据积累中，暂不下结论', nextAction: '下一周期复核',
+        });
+      }
+    });
+    const acc = w.last_week_acceptance;
+    if (acc && acc.available && Array.isArray(acc.items)) {
+      acc.items.forEach(it => {
+        const row = { expNo: it.resolutionNo, name: it.name, category: it.category, verdict: it.verdict, detail: it.detail, period: acc.period };
+        if (it.verdict === '验证有效') experiences.verified_valid.push(row);
+        else if (it.verdict === '验证无效') experiences.verified_invalid.push(row);
+        else experiences.pending.push(row);
+      });
+    }
+    (w.strategy_versions || []).forEach(sv => experiences.strategy_versions.push({ ...sv, from_period: w.period }));
+  });
+
+  // ── V6.0 经营目标追踪（真实进度 + 官方门槛 + 阶段；目标数值由 WorkBuddy 制定，不擅自设无依据门槛）
+  const businessGoals = {
+    phase: currentPhase,
+    phaseNote: '目标数值/完成时间由 WorkBuddy 依据真实经营情况制定，看板仅展示；阶段转换需真实数据支撑，不擅自设定',
+    goals: [
+      { id: 'g-follower', name: '累计粉丝（阶段目标）', target: followerTarget, current: followers, pct: followerPct, gap: Math.max(0, followerTarget - followers), cycle: '阶段', deadline: '—', status: followers >= followerTarget ? '已达成' : '进行中', deviation: `本周净增 ${userGrowth.weeklyNet}，距官方返佣门槛(${TM_COMMISSION})差 ${Math.max(0, TM_COMMISSION - followers)}` },
+      { id: 'g-content', name: '已发布内容（累计产出）', target: publishedCount, current: publishedCount, pct: 100, gap: 0, cycle: '累计', deadline: '—', status: '持续', deviation: `待发布 ${pendingDrafts} 篇，通关率 ${passRate}%` },
+      { id: 'g-search', name: '搜一搜占比（流量结构）', target: 30, current: searchPct, pct: Math.min(100, Math.round(searchPct / 30 * 100)), gap: Math.max(0, 30 - searchPct), cycle: '周', deadline: '—', status: searchPct >= 30 ? '已达成' : '进行中', deviation: `当前 ${searchPct}%（推荐 ${recommendPct}%）` },
+      { id: 'g-tm', name: '流量主·返佣能力门槛', target: TM_COMMISSION, current: followers, pct: Math.min(100, Math.round(followers / TM_COMMISSION * 100)), gap: Math.max(0, TM_COMMISSION - followers), cycle: '长期', deadline: '—', status: followers >= TM_COMMISSION ? '已达成' : '进行中', deviation: '官方门槛，达成后可开通返佣商品/短剧推广' },
+      { id: 'g-tmp', name: '流量主·程序化广告门槛', target: TM_PROGRAMMATIC, current: followers, pct: Math.min(100, Math.round(followers / TM_PROGRAMMATIC * 100)), gap: Math.max(0, TM_PROGRAMMATIC - followers), cycle: '长期', deadline: '—', status: followers >= TM_PROGRAMMATIC ? '已达成' : '进行中', deviation: '官方门槛，达成后可开通程序化广告（核心收益）' },
+    ],
+    history: reviews.map(r => ({ period: r.name, window: r.window, reads: r.reads?.this_week ?? null, wow: r.reads?.wow_pct ?? null })),
+  };
+
+
   appData = {
     generated_at: nowIso,
     account: man.account || "AI工具研究所",
@@ -539,7 +689,7 @@ function collect() {
       today:   todayEntry ? { date: todayEntry.business_date, title: todayEntry.title, status: isPublished(webRec[today], draftMap[today]) ? '已发布' : '进行中' } : null,
       tomorrow: tmrwEntry ? { date: tomorrow, title: tmrwEntry.title, status: '待发布' } : null,
     },
-    trend: trendDays, userTrend, topics: derivedTopics, kanban, articles, drafts,
+    trend: trendDays, trendSource, userTrend, topics: derivedTopics, kanban, articles, drafts,
     publishHistory, categories, alerts: blocked.slice(-5),
     assets: { names: assetNames, lastDraft },
     topArticles, diagnostics: { findings, severity, summary: `发现 ${severity.critical} 个关键问题、${severity.warning} 个警告、${severity.info} 条信息` },
@@ -561,7 +711,14 @@ function collect() {
     contentPlans: contentPlans.slice().reverse(),
     latestContentPlan: contentPlans.length > 0 ? contentPlans[contentPlans.length - 1] : null,
     dataUpdateLog: dataUpdateLog,
-    meta: { phase: 'V5.2 经营优化闭环', dataSources: [lastSnapFile, 'follower_watch.json', 'weekly_review/', 'daily_brief/', 'weekly_resolution/', 'content_plan/', 'data_update_log/'] },
+    // V6.0 经营监督与决议追踪：经营日历 / 文章生命周期 / 经营实验 / 经验沉淀 / 经营目标追踪
+    opsCalendar,
+    articleLifecycle,
+    lifecycleHighlights,
+    experiments,
+    experiences,
+    businessGoals,
+    meta: { phase: 'V6.0 经营监督与决议追踪中心', dataSources: [lastSnapFile, 'follower_watch.json', 'article-performance.csv', 'weekly_review/', 'daily_brief/', 'weekly_resolution/', 'content_plan/', 'data_update_log/'] },
   };
 }
 

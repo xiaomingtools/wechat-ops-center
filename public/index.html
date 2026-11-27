@@ -211,6 +211,10 @@ canvas{width:100%!important;height:180px!important;display:block}
 <div class="page" id="page-resolution"></div>
 <!-- ═══ 6c 每日简报 ═══ -->
 <div class="page" id="page-brief"></div>
+<!-- ═══ V6 经营日历 ═══ -->
+<div class="page" id="page-calendar"></div>
+<!-- ═══ V6 经营实验与经验沉淀 ═══ -->
+<div class="page" id="page-experiment"></div>
 <!-- ═══ 7 经营档案 ═══ -->
 <div class="page" id="page-archive"></div>
 <!-- ═══ 7b 数据更新记录 ═══ -->
@@ -321,6 +325,8 @@ const I = {
   update:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>',
   system:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 20h8M12 18v2"/></svg>',
   theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
+  experiment:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/></svg>',
 };
 const TABS = [
   {id:'overview',name:'经营总览',icon:I.ov},
@@ -331,6 +337,8 @@ const TABS = [
   {id:'strategy',name:'策略与复盘',icon:I.strategy},
   {id:'resolution',name:'运营决议',icon:I.resolution},
   {id:'brief',name:'每日简报',icon:I.brief},
+  {id:'calendar',name:'经营日历',icon:I.calendar},
+  {id:'experiment',name:'实验与经验',icon:I.experiment},
   {id:'archive',name:'经营档案',icon:I.archive},
   {id:'update',name:'数据更新记录',icon:I.update},
   {id:'system',name:'系统监控',icon:I.system},
@@ -413,8 +421,9 @@ function renderOverview(){
   <div class="prog"><i style="width:${o.followerPct||0}%"></i></div>
   <div class="note">${o.followers||0} / ${o.followerTarget||100} · 还差 ${Math.max(0,(o.followerTarget||100)-(o.followers||0))}</div>
 
-  ${card('本周阅读趋势','近7天')}
+  ${card('近7天粉丝逐日趋势', D.trendSource||'后台 user_analysis_daily')}
   <div class="chart-wrap"><canvas id="trendChart"></canvas><div class="chl" id="trendLabels"></div></div>
+  <div class="note">真实数据源：${esc(D.trendSource||'后台逐日用户数据')}。后台未提供逐日"阅读"字段，此处展示真实可得的逐日粉丝累计值；不伪造阅读曲线。</div>
 
   <div class="grid2" style="margin-top:14px">
     <div class="card-h" style="margin-bottom:10px">本周计划</div>
@@ -433,6 +442,22 @@ function renderOverview(){
     </div>
     <div class="card" style="margin:0"><div class="card-h">当前内容更新方向 ${latestPlan?`<span class="hint">${esc(latestPlan.for_period||'')}</span>`:''}</div>
       ${latestPlan?`<div class="li-m" style="font-size:12px;line-height:1.7">核心：${esc(planCore)}<br>本周计划 ${(latestPlan.plan?.schedule||[]).length} 天选题</div><div class="note" style="margin-top:8px">完整内容计划见「运营决议」页</div>`:emptyState('暂无内容计划')}
+    </div>
+  </div>
+
+  ${card('经营驾驶舱 · 快速问答','直接回答经营核心问题', '')}
+  <div class="grid2">
+    <div>
+      <div class="card-h" style="font-size:12px">上周的改动有没有效果？</div>
+      ${(()=>{ const acc=latestRes?.last_week_acceptance; if(!acc||!acc.available) return '<div class="li-m muted">无上一期决议可验收（首期或历史缺失）。</div>';
+        const items=acc.items||[];
+        const vC={验证有效:0,验证无效:0,证据不足:0}; items.forEach(i=>{if(vC[i.verdict]!=null)vC[i.verdict]++;});
+        return `<div class="li-m" style="font-size:12px;line-height:1.7">上期 ${esc(acc.period||'')} 共 ${items.length} 条决议验收：<b class="b-ok">${vC.验证有效} 项有效</b> · ${vC.验证无效} 项无效 · <b class="b-warn">${vC.证据不足} 项证据不足</b><br>${(items.slice(0,3)).map(i=>`· ${esc(i.name)} → ${esc(i.verdict)}`).join('<br>')}<div class="note" style="margin-top:6px">证据不足项不据此下结论，见「运营决议」页完整验收表</div></div>`; })()}
+    </div>
+    <div>
+      <div class="card-h" style="font-size:12px">下周准备调整什么？</div>
+      ${(()=>{ const items=latestRes?.resolutions||[]; const adj=items.filter(r=>r.category==='重点调整'); if(!adj.length) return '<div class="li-m muted">本期无"重点调整"类决议，维持当前节奏。</div>';
+        return `<div class="li-m" style="font-size:12px;line-height:1.7">${adj.slice(0,3).map(r=>`· <b>${esc(r.name)}</b>：${esc(r.action)}`).join('<br>')}<div class="note" style="margin-top:6px">共 ${items.length} 条决议（保持/调整/停止/新增），完整见「运营决议」页</div></div>`; })()}
     </div>
   </div>`;
   document.getElementById('page-overview').innerHTML=html;
@@ -464,7 +489,21 @@ function renderData(){
   <div class="tbl-wrap"><table class="t"><thead><tr><th>目标</th><th>目标值</th><th>当前</th><th>完成率</th></tr></thead><tbody>
     ${ (D.annualPlan?.monthlyTargets||[]).map(m=>`<tr><td>${esc(m.month)} · ${esc(m.note||'')}</td><td>${esc(m.goal)}</td><td>${esc(m.actual)}</td><td>${m.goal==='100'&&m.actual==='12'?'12%':'—'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">暂无目标数据</td></tr>' }
   </tbody></table></div>
-  <div class="note">里程碑：${(D.annualPlan?.keyMilestones||[]).map(m=>`${esc(m.milestone)}(${esc(m.status)})`).join(' · ')}</div>`;
+  <div class="note">里程碑：${(D.annualPlan?.keyMilestones||[]).map(m=>`${esc(m.milestone)}(${esc(m.status)})`).join(' · ')}</div>
+
+  ${card('经营目标追踪','长期 / 季度 / 月度 / 周度 / 阶段 · 真实进度','阶段转换需真实数据支撑')}
+  ${(()=>{ const g=D.businessGoals; if(!g||!g.goals?.length) return emptyState('暂无目标数据');
+    const sBadge=s=>s==='已达成'?'b-ok':s==='进行中'?'b-info':'b-mute';
+    return `
+    <div class="grid4" style="margin-bottom:10px">
+      ${g.goals.map(x=>`<div class="kpi"><div class="kpi-num ${sBadge(x.status)=== 'b-ok'?'ok':sBadge(x.status)==='b-info'?'':'muted'}">${x.pct??'--'}%</div><div class="kpi-label">${esc(x.name)}</div><div class="kpi-sub">${esc(x.current??'--')} / ${esc(x.target??'--')} · 差 ${x.gap??'--'}</div><div class="prog"><i style="width:${x.pct||0}%"></i></div></div>`).join('')}
+    </div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>目标</th><th>周期</th><th>状态</th><th>偏差分析（WorkBuddy）</th></tr></thead><tbody>
+      ${g.goals.map(x=>`<tr><td>${esc(x.name)}</td><td class="muted">${esc(x.cycle)}</td><td><span class="badge ${sBadge(x.status)}">${esc(x.status)}</span></td><td class="muted" style="max-width:320px">${esc(x.deviation||'')}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${g.history?.length?`<div class="note">历史完成：${g.history.map(h=>`${esc(h.period)} 阅读 ${h.reads??'--'}${h.wow!=null?(h.wow>0?'+':'')+h.wow+'%':''}`).join(' · ')}</div>`:''}
+    <div class="note">${esc(g.phaseNote||'')}。目标数值/完成时间由 WorkBuddy 依据真实经营情况制定，看板仅展示。</div>`; })()}
+`;
   document.getElementById('page-data').innerHTML=html;
 }
 
@@ -481,9 +520,39 @@ function renderContent(){
 
   ${card('发布清单','点击筛选 / 排序', '点击列标题排序')}
   <div id="artList" style="max-height:520px;overflow-y:auto"></div>
-  <div class="note">网站教程与公众号文章已按 business_date 建立关联；此处仅作只读查看，不扩展为网站管理系统。</div>`;
+  <div class="note">网站教程与公众号文章已按 business_date 建立关联；此处仅作只读查看，不扩展为网站管理系统。</div>
+
+  ${renderLifecycleBlock()}
+`;
   document.getElementById('page-content').innerHTML=html;
   filterContent();
+}
+
+/* ═══ V6 文章生命周期档案（融入内容资产页；分阶段数据无历史快照标"待观察"，不虚构）═══ */
+function renderLifecycleBlock(){
+  const al=D.articleLifecycle||[];
+  const hl=D.lifecycleHighlights||{};
+  if(!al.length) return card('文章生命周期档案','暂无', emptyState('暂无已发布文章的生命周期档案'));
+  const val=(v)=>v==null?'待观察':v;
+  const tagCls=t=>t==='高阅读'||t==='高搜索价值'?'b-ok':t==='高传播'||t==='高关注转化'?'b-info':'b-mute';
+  return `
+  ${card('文章生命周期档案',al.length+' 篇已发布','分阶段表现 · 数据不足标"待观察"')}
+  <div class="note" style="margin-bottom:10px">${esc(hl.watchNote||'')} · 无台账记录待补采 ${hl.pendingCount??'—'} 篇。</div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>文章</th><th>发布</th><th>累计阅读</th><th>搜索/推荐</th><th>分享</th><th>关注转化</th><th>24h/3d/7d/30d/90d</th><th>标签</th></tr></thead><tbody>
+    ${al.slice(0,40).map(a=>`<tr>
+      <td style="max-width:220px">${esc(a.title)}</td>
+      <td class="muted">${fmtDate(a.publishDate)}</td>
+      <td><b>${val(a.readsTotal)}</b></td>
+      <td class="muted">${val(a.searchReads)}/${val(a.recommendReads)}</td>
+      <td class="muted">${val(a.shares)}</td>
+      <td class="muted">${val(a.followsFromArticle)}</td>
+      <td class="muted" style="font-size:11px">${(a.stages||[]).map(s=>s.value).join(' / ')}</td>
+      <td style="max-width:160px">${(a.tags||[]).map(t=>`<span class="badge ${tagCls(t)}">${esc(t)}</span>`).join(' ')||'—'}</td>
+    </tr>`).join('')}
+  </tbody></table></div>
+  ${(()=>{ const hi=[['高阅读价值',hl.highReads],['高搜索价值',hl.highSearch],['高传播价值',hl.highShare],['长尾流量候选',hl.evergreen],['表现待观察',hl.lowPerform]].filter(x=>(x[1]||[]).length);
+    return hi.length?`<div class="grid2" style="margin-top:12px">${hi.map(([name,list])=>`<div><div class="card-h" style="font-size:12px">${esc(name)}</div>${list.map(a=>`<div class="li-m">· ${esc(a.title)}（${a.readsTotal??'--'} 阅读）</div>`).join('')}</div>`).join('')}</div>`:''; })()}
+  `;
 }
 function toggleCat(c){ _catFilter = _catFilter===c?'':c;
   document.querySelectorAll('#catChips .chip').forEach(x=>x.classList.toggle('on', x.textContent.includes(c)&&_catFilter===c));
@@ -757,6 +826,85 @@ function renderUpdateLog(){
 }
 
 
+/* ═══ V6 经营日历（按日聚合真实归档，状态由真实回执判定；无事件≠已完成，不自动推断）═══ */
+function renderCalendar(){
+  const cal=D.opsCalendar||[];
+  const stBadge=s=>{
+    if(s.includes('周度复盘日')) return '<span class="badge b-info">复盘日</span>';
+    if(s==='正常完成') return '<span class="badge b-ok">正常完成</span>';
+    if(s==='部分完成') return '<span class="badge b-info">部分完成</span>';
+    if(s==='执行失败') return '<span class="badge b-crit">执行失败</span>';
+    if(s==='等待执行') return '<span class="badge b-mute">等待执行</span>';
+    return '<span class="badge b-mute">无数据</span>';
+  };
+  const evIcon={article:'📄',draft:'📝',brief:'📊',weekly_review:'📈',snapshot:'📷',incident:'⚠️',milestone:'⭐',growth:'👤',data:'🗂️'};
+  let html=`
+  ${card('经营日历',cal.length?`共 ${cal.length} 个有记录日期`:'','点击日期查看当日经营档案')}
+  <div class="note" style="margin-bottom:10px">状态基于真实归档回执（发布/草稿/简报/复盘/快照/拦截）判定，<b>不根据日期自动推断已完成</b>。周度复盘日与重要经营事件用不同标识。</div>
+  <div class="tbl-wrap"><table class="t"><thead><tr><th>日期</th><th>状态</th><th>发布</th><th>草稿</th><th>事件</th></tr></thead><tbody>
+    ${cal.map(c=>{
+      const d=c.detail||{};
+      const evs=(c.events||[]).slice(0,4).map(e=>`${evIcon[e.type]||'·'} ${esc(e.title)}`).join('<br>')||'—';
+      return `<tr onclick="calPick('${c.date}')" style="cursor:pointer">
+        <td><b>${esc(c.date)}</b> ${c.isWeeklyReviewDay?'<span class="badge b-info">周日复盘</span>':''}</td>
+        <td>${stBadge(c.status)}</td>
+        <td>${d.published?d.published+' 篇':'—'}</td>
+        <td>${d.drafts?d.drafts+' 篇':'—'}</td>
+        <td class="muted" style="max-width:300px">${evs}</td>
+      </tr>`;}).join('') || '<tr><td colspan="5" class="muted">暂无经营日历记录</td></tr>'}
+  </tbody></table></div>
+  <div id="calDetail"></div>`;
+  document.getElementById('page-calendar').innerHTML=html;
+  window.calPick=(date)=>{
+    const c=(D.opsCalendar||[]).find(x=>x.date===date); if(!c)return;
+    const d=c.detail||{};
+    const evs=(c.events||[]).map(e=>`<div class="li"><div class="li-t">${evIcon[e.type]||'·'} ${esc(e.title)}</div>${e.detail?`<div class="li-m">${esc(e.detail)}</div>`:''}</div>`).join('')||'<div class="empty">当日无事件记录</div>';
+    document.getElementById('calDetail').innerHTML=`
+    ${card('当日经营档案 · '+esc(date),'状态：'+esc(c.status),'')}
+    <div class="grid4" style="margin-bottom:10px">
+      <div class="kpi"><div class="kpi-num">${d.published?d.published:0}</div><div class="kpi-label">发布文章</div></div>
+      <div class="kpi"><div class="kpi-num">${d.drafts?d.drafts:0}</div><div class="kpi-label">制作草稿</div></div>
+      <div class="kpi"><div class="kpi-num">${d.brief?'✓':'—'}</div><div class="kpi-label">每日简报</div></div>
+      <div class="kpi"><div class="kpi-num">${d.snapshot?'✓':'—'}</div><div class="kpi-label">数据快照</div></div>
+    </div>
+    ${(d.incidents&&d.incidents.length)?`<div class="card-h" style="font-size:12px">当日异常</div>${d.incidents.map(x=>`<div class="li"><div class="li-t">⚠️ ${esc(x.title)}</div><div class="li-m">${esc(x.detail||'')}</div></div>`).join('')}`:''}
+    <div class="card-h" style="font-size:12px">当日事件明细</div>
+    ${evs}
+    <div class="note" style="margin-top:10px">周度复盘日：${c.isWeeklyReviewDay?'是':'否'} · 第 ${c.week} 周 · ${esc(c.year||'')} 年 ${esc(c.month||'')} 月。仅展示可追溯真实记录，缺失项不编造。</div>`;
+    document.getElementById('calDetail').scrollIntoView({behavior:'smooth',block:'start'});
+  };
+}
+
+/* ═══ V6 经营实验 + 经验沉淀（只提取真实决议/验收记录；证据不足标待验证，不保存AI推测）═══ */
+function renderExperiment(){
+  const exp=D.experiments||[];
+  const ex=D.experiences||{};
+  const badge=v=>v==='验证有效'?'b-ok':v==='验证无效'?'b-crit':v==='证据不足'?'b-warn':'b-info';
+  let html=`
+  ${card('经营策略实验档案','由 WorkBuddy 设计 · 看板仅展示 · 样本不足标"证据不足"', exp.length?`共 ${exp.length} 项`:'')}
+  ${exp.length?exp.map(x=>`<div class="li">
+    <div class="li-t"><span style="font-family:monospace;color:var(--dim);font-size:11px">${esc(x.expNo)}</span> ${esc(x.name)} <span class="badge ${badge(x.result)}">${esc(x.result)}</span></div>
+    <div class="li-m">目的：${esc(x.purpose)}</div>
+    <div class="li-m">假设：${esc(x.hypothesis)}</div>
+    <div class="li-m">数据依据：${esc(x.dataBasis)} · 对照：${esc(x.controlNote)}</div>
+    <div class="li-m">测试内容：${esc(x.testContent)} · 周期：${esc(x.period)}</div>
+    <div class="li-m">验证指标：${esc(x.verifyMetric)} · 关联决议：${esc(x.relatedResolution)}</div>
+    <div class="li-m">结论：${esc(x.conclusion)} → 后续：${esc(x.nextAction)}</div>
+  </div>`).join(''):emptyState('暂无经营实验。实验由 WorkBuddy 在周度决议"新增尝试"中提出，看板据此建立档案；样本不足时标记证据不足，不强行下结论。')}
+  <div class="note">当前公众号数据样本较少，优先做低成本、小范围、可持续验证的实验；尽量减少同时改变多个变量。经营指挥中心只展示实验，不负责执行。</div>
+
+  ${card('经营经验与知识沉淀','可追溯至决议/验收记录 · 不保存AI推测','')}
+  <div class="card-h" style="font-size:12px">✅ 已验证有效（${(ex.verified_valid||[]).length}）</div>
+  ${(ex.verified_valid||[]).length?(ex.verified_valid||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 源自 ${esc(r.period)} ${esc(r.expNo)}</div></div>`).join(''):emptyState('暂无已验证有效经验（证据不足不入库）')}
+  <div class="card-h" style="font-size:12px;margin-top:10px">⛔ 已验证无效（${(ex.verified_invalid||[]).length}）</div>
+  ${(ex.verified_invalid||[]).length?(ex.verified_invalid||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 不建议重复执行 · 源自 ${esc(r.period)}</div></div>`).join(''):emptyState('暂无已验证无效记录')}
+  <div class="card-h" style="font-size:12px;margin-top:10px">🔍 待验证（${(ex.pending||[]).length}）</div>
+  ${(ex.pending||[]).length?(ex.pending||[]).map(r=>`<div class="li"><div class="li-t">${esc(r.name)}</div><div class="li-m">${esc(r.detail)} · 标记：${esc(r.verdict)} · 源自 ${esc(r.period)}</div></div>`).join(''):emptyState('暂无待验证经验')}
+  ${(ex.strategy_versions||[]).length?`<div class="card-h" style="font-size:12px;margin-top:10px">📚 经营策略版本档案</div>${ex.strategy_versions.map(v=>`<div class="li-m">${esc(v.period||v.from_period)} · ${esc(v.summary||'')}</div>`).join('')}`:''}
+  <div class="note">所有经营经验均可追溯至对应决议/验收/数据记录；AI 推测不直接保存为已验证经验。</div>`;
+  document.getElementById('page-experiment').innerHTML=html;
+}
+
 /* ═══ 7 经营档案 ═══ */
 function renderArchive(){
   const ar=D.archives||[];
@@ -846,7 +994,7 @@ function lineChart(id,labels,vals,color){
   if(lb) lb.innerHTML=labels.map(l=>`<span>${l}</span>`).join('');
 }
 function drawTrend(){ const d=D.trend||[]; if(!d.length)return;
-  lineChart('trendChart', d.map(x=>x.date), d.map(x=>x.reads), getComputedStyle(document.documentElement).getPropertyValue('--c1')); }
+  lineChart('trendChart', d.map(x=>x.date), d.map(x=>x.total||0), getComputedStyle(document.documentElement).getPropertyValue('--c1')); }
 function drawUserChart(){ const d=(D.userTrend||[]); if(!d.length)return;
   lineChart('userChart', d.map(x=>x.date), d.map(x=>x.total), getComputedStyle(document.documentElement).getPropertyValue('--c2')); }
 function drawChannelChart(){ const c=document.getElementById('chanChart'); if(!c)return;
@@ -868,6 +1016,7 @@ function renderAll(){
   document.getElementById('lastUpdated').textContent='数据更新 '+fmtDt(D.generated_at);
   renderOverview(); renderData(); renderContent(); renderWork();
   renderRevenue(); renderStrategy(); renderResolution(); renderBrief();
+  renderCalendar(); renderExperiment();
   renderArchive(); renderUpdateLog(); renderSystem(); renderThemePanel();
   showPage('overview');
 }
