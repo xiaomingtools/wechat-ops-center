@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<title>经营指挥中心 · V5</title>
+<title>经营指挥中心 · V6</title>
 <style>
 /* ═══ 主题变量体系（统一在此管理，避免硬编码散落）═══ */
 :root{
@@ -180,13 +180,13 @@ canvas{width:100%!important;height:180px!important;display:block}
     <span id="staleTip" class="stale-tip">数据已过期，请重新采集</span>
   </div>
   <div class="r">
-    <span class="phase-chip">V5.0 全景经营指挥中心</span>
+    <span class="phase-chip">V6.0 经营监督与决议追踪中心</span>
     <span id="clockDisplay" style="font-weight:700;color:var(--title)">--:--</span>
   </div>
 </div>
 
 <div class="header">
-  <h1>经营指挥中心 <span class="tag" id="verTag">V5</span></h1>
+  <h1>经营指挥中心 <span class="tag" id="verTag">V6</span></h1>
   <div class="sub">
     <span id="accountName">AI工具研究所 · 内容运营中心</span>
     <span class="muted" id="lastUpdated"></span>
@@ -923,7 +923,7 @@ function renderSystem(){
   let html=`
   ${card('系统运行监控','真实运行状态，非静态文字')}
   <div class="tbl-wrap"><table class="t"><thead><tr><th>项</th><th>状态</th><th>时间 / 值</th></tr></thead><tbody>
-    <tr><td>系统版本</td><td><span class="badge b-info">${esc(s.version||'V5.0')}</span></td><td class="muted">全景经营指挥中心</td></tr>
+    <tr><td>系统版本</td><td><span class="badge b-info">${esc(s.version||'V6.0')}</span></td><td class="muted">经营监督与决议追踪中心</td></tr>
     <tr><td>本地服务</td><td>${lvb(s.localService==='RUNNING'?'正常':'异常')}</td><td class="muted">${esc(s.localService||'--')}</td></tr>
     <tr><td>云端服务</td><td>${lvb(s.cloudService==='ONLINE'?'正常':'异常')}</td><td class="muted">wechat-ops-center.vercel.app</td></tr>
     <tr><td>微信登录态</td><td>${lvb(s.wxLogin==='LOGGED_IN'?'正常':'异常')}</td><td class="muted">${esc(s.wxLogin)}</td></tr>
