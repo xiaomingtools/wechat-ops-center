@@ -22,7 +22,8 @@ function log(msg, color = 'reset') {
 }
 
 function run(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', shell: true, ...opts });
+  // 默认 shell: false，避免 shell 解释 commit message 中的空格/中文导致 pathspec 错误
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', shell: false, ...opts });
   return { code: r.status, stdout: r.stdout?.toString() || '', stderr: r.stderr?.toString() || '' };
 }
 
@@ -64,7 +65,8 @@ async function main() {
 
   // ---- 2. pull fresh /api/app ----
   log('[2/6] fetching /api/app ...', 'yellow');
-  const { stdout: appData } = run('curl', ['-s', '-m', '10', 'http://localhost:3001/api/app']);
+  // curl 是外部命令，必须 shell: true；git 子命令保持 shell: false 避免 pathspec 错误
+  const { stdout: appData } = run('curl', ['-s', '-m', '10', 'http://localhost:3001/api/app'], { shell: true });
   if (!appData) { log('fetch failed', 'red'); process.exit(1); }
   fs.mkdirSync(path.join(ROOT, 'data'), { recursive: true });
   const newFile = path.join(ROOT, 'data', '.appdata.new.json');
@@ -122,18 +124,29 @@ async function main() {
   // ---- 4. write fresh data and commit ----
   log('[4/6] writing fresh data & committing ...', 'yellow');
   // fetch again to ensure fresh data
-  const { stdout: freshData } = run('curl', ['-s', '-m', '10', 'http://localhost:3001/api/app']);
+  const { stdout: freshData } = run('curl', ['-s', '-m', '10', 'http://localhost:3001/api/app'], { shell: true });
   fs.writeFileSync(path.join(ROOT, 'data', 'appdata.json'), freshData);
   run('git', ['add', 'data/appdata.json'], { cwd: ROOT });
   const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
-  run('git', ['commit', '-m', `sync: refresh cloud data appdata.json @ ${ts}`], { cwd: ROOT });
+  // 用 shell: false，避免 shell 解释 commit message 中的空格/中文导致 pathspec 错误
+  const commit = run('git', ['commit', '-m', `sync: refresh cloud data appdata.json @ ${ts}`], { cwd: ROOT, shell: false });
+  // 提交可能因 "nothing to commit" 失败（工作区与 HEAD 相同）；此时 push 也会是 no-op
+  if (commit.code !== 0 && !commit.stdout.includes('nothing to commit') && !commit.stderr.includes('nothing to commit')) {
+    log(`git commit failed: ${commit.stderr || commit.stdout}`, 'yellow');
+  }
 
   // ---- 5. git push with retry ----
   log('[5/6] pushing to GitHub ...', 'yellow');
   let pushOk = false;
   for (let i = 1; i <= 3; i++) {
     const push = run('git', ['push', 'origin', 'main'], { cwd: ROOT });
-    if (push.code === 0) { log('      data updated & pushed to GitHub', 'green'); pushOk = true; break; }
+    // push 成功 (exit 0) 或 no-op (up to date) 均视为 OK
+    const isNoOp = push.stdout.includes('Everything up-to-date') || push.stdout.includes('up to date');
+    if (push.code === 0 || isNoOp) {
+      log('      data updated & pushed to GitHub', 'green');
+      pushOk = true;
+      break;
+    }
     log(`  [重试] git push 失败，退出码 ${push.code}，5s 后重试...`, 'yellow');
     await new Promise(r => setTimeout(r, 5000));
   }
@@ -167,11 +180,28 @@ async function main() {
   // ---- 7. 云端回读核验 ----
   log('[7/7] 云端数据核验...', 'cyan');
   // 使用 GitHub API 而非 raw.githubusercontent.com，避免 CDN 缓存导致误判
-  const { stdout: apiData } = run('curl', ['-s', '-H', 'Accept: application/vnd.github.v3+json', '-m', '15', 'https://api.github.com/repos/xiaomingtools/wechat-ops-center/contents/data/appdata.json?ref=main']);
-  if (!apiData) { log('云端数据核验失败：无法获取 GitHub API 数据', 'red'); process.exit(1); }
-  const apiResponse = JSON.parse(apiData);
-  // GitHub API returns content as base64 encoded
-  const cloudContent = Buffer.from(apiResponse.content, 'base64').toString('utf8');
+  // GitHub API 响应有约 10-30s 延迟（push 后索引），轮询等待新内容生效
+  let apiResponse = null;
+  let cloudContent = '';
+  for (let i = 1; i <= 5; i++) {
+    log(`  [回读 ${i}/5] 等待 GitHub API 响应...`, 'gray');
+    const { stdout: apiData } = run('curl', ['-s', '-H', 'Accept: application/vnd.github.v3+json', '-m', '15', 'https://api.github.com/repos/xiaomingtools/wechat-ops-center/contents/data/appdata.json?ref=main'], { shell: true });
+    if (!apiData) { log('      GitHub API 无响应，10s 后重试', 'yellow'); await new Promise(r => setTimeout(r, 10000)); continue; }
+    try {
+      apiResponse = JSON.parse(apiData);
+      cloudContent = Buffer.from(apiResponse.content, 'base64').toString('utf8');
+      // 验证：云端内容是否已包含本次推送的 generated_at（若本次有 commit）
+      const localGenerated = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'appdata.json'), 'utf8')).generated_at;
+      const cloudGenerated = JSON.parse(cloudContent).generated_at;
+      if (localGenerated === cloudGenerated) { log(`      云端已同步 (generated_at=${cloudGenerated})`, 'green'); break; }
+      log(`      云端尚未同步（local=${localGenerated} cloud=${cloudGenerated}），10s 后重试`, 'yellow');
+      await new Promise(r => setTimeout(r, 10000));
+    } catch (e) {
+      log(`      回读异常：${e.message}，10s 后重试`, 'yellow');
+      await new Promise(r => setTimeout(r, 10000));
+    }
+  }
+  if (!cloudContent) { log('云端数据核验失败：无法获取 GitHub API 数据', 'red'); process.exit(1); }
   const cloudFile = path.join(ROOT, 'data', '.appdata.cloud.json');
   fs.writeFileSync(cloudFile, cloudContent);
 
