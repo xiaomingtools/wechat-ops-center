@@ -26,6 +26,8 @@ const path = require('path');
 const ROOT = 'E:/自动盈利系统/公众号运营中心';
 const RES_DIR = path.join(ROOT, '10_运营数据', 'weekly_resolution');
 const PLAN_DIR = path.join(ROOT, '10_运营数据', 'content_plan');
+const PLAYBOOK_DIR = path.join(ROOT, '00_总控');
+const PLAYBOOK_ARCHIVE_DIR = path.join(PLAYBOOK_DIR, 'playbook_archive');
 const PUBLISH_PS1 = path.join(ROOT, 'wechat-ops-center', 'publish_cloud.ps1');
 
 const p2 = n => String(n).padStart(2, '0');
@@ -226,6 +228,7 @@ function buildContentPlan(app, w, resolutions) {
 
   fs.mkdirSync(RES_DIR, { recursive: true });
   fs.mkdirSync(PLAN_DIR, { recursive: true });
+  fs.mkdirSync(PLAYBOOK_ARCHIVE_DIR, { recursive: true });
 
   const nextPeriod = fmtDate((() => { const d = new Date(w.end); d.setDate(d.getDate() + 7); return d; })());
   const resPayload = {
@@ -273,6 +276,53 @@ function buildContentPlan(app, w, resolutions) {
   };
   const planJsonPath = path.join(PLAN_DIR, `${w.endStr}.json`);
   fs.writeFileSync(planJsonPath, JSON.stringify(planPayload, null, 2), 'utf8');
+
+  // ── 同步生成 00_总控/NEXT_WEEK_PLAYBOOK.md（每日内容生产实际读取的口径文件）──
+  // 旧版 NEXT_WEEK_PLAYBOOK 是手工维护，与 weekly_ops 生成的 content_plan 脱节；
+  // 现统一由 weekly_ops 生成，确保每日内容生产真正读取最新周度决议与内容计划。
+  const oldPlaybook = path.join(PLAYBOOK_DIR, 'NEXT_WEEK_PLAYBOOK.md');
+  if (fs.existsSync(oldPlaybook)) {
+    fs.renameSync(oldPlaybook, path.join(PLAYBOOK_ARCHIVE_DIR, `NEXT_WEEK_PLAYBOOK_${w.endStr}.md`));
+  }
+  const playbookLines = [];
+  playbookLines.push('# 下周内容执行口径（NEXT_WEEK_PLAYBOOK）');
+  playbookLines.push('');
+  playbookLines.push(`> 由每周日 17:00 周度复盘自动改写（weekly_ops.js）；每日生产（选题、标题、正文结构）以本文件为准。`);
+  playbookLines.push(`> 生成时间：${new Date().toLocaleString('zh-CN')} · 依据：10_运营数据/weekly_resolution/${w.endStr}.json + content_plan/${w.endStr}.json`);
+  playbookLines.push('');
+  playbookLines.push(`## 一、本期决议摘要（${resolutions.length} 条）`);
+  playbookLines.push('');
+  resolutions.forEach(r => {
+    playbookLines.push(`- ${r.no} ${r.name} [${r.category}] ${r.priority}：${r.action}`);
+  });
+  playbookLines.push('');
+  playbookLines.push(`## 二、下周七天内容计划（${plan.schedule.length} 天）`);
+  playbookLines.push('');
+  plan.schedule.forEach(s => {
+    playbookLines.push(`- ${s.day}：${s.topic} — ${s.title} [决议：${s.resolutionRef}]`);
+  });
+  playbookLines.push('');
+  playbookLines.push(`## 三、核心方向`);
+  playbookLines.push('');
+  playbookLines.push(`- 保持：${plan.focusCategories.join('、') || '—'}`);
+  playbookLines.push(`- 减少：${plan.reduceCategories.join('、') || '—'}`);
+  playbookLines.push(`- 新增测试：${plan.newTestCategories.join('、') || '—'}`);
+  playbookLines.push(`- 配比：${Object.entries(plan.ratios || {}).map(([k,v]) => `${k} ${v}`).join(' / ')}`);
+  playbookLines.push('');
+  playbookLines.push('## 四、上周决议执行验收');
+  playbookLines.push('');
+  if (acceptance.available) {
+    acceptance.items.forEach(it => {
+      playbookLines.push(`- ${it.resolutionNo} ${it.name}：${it.verdict}（${it.detail.slice(0, 80)}...）`);
+    });
+  } else {
+    playbookLines.push(acceptance.note || '无上一期决议可验收');
+  }
+  playbookLines.push('');
+  playbookLines.push('---');
+  playbookLines.push(`*由 WorkBuddy 自动流程生成 · 经营指挥中心仅查看 · 决议/计划/验收均关联编号*`);
+  fs.writeFileSync(oldPlaybook, playbookLines.join('\n'), 'utf8');
+  console.log(`✅ 执行口径同步: ${oldPlaybook}`);
 
   console.log(`✅ 运营决议: ${resJsonPath}\n   (${resolutions.length} 条 · 验收${acceptance.available ? acceptance.items.length + '条上期' : '无'})`);
   console.log(`✅ 内容计划: ${planJsonPath}\n   (周一~周日 ${plan.schedule.length} 天 · 核心 ${plan.coreDirection})`);
