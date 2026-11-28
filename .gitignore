@@ -6,3 +6,10 @@ server.log
 
 .vercel
 .env*
+
+# 临时核验/调试文件（不入库）
+.check_gh_final2.json
+check_cloud.json
+data/.appdata.cloud.json
+data/.appdata.old.json
+data/.appdata.new.json
