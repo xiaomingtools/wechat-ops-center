@@ -361,7 +361,9 @@ function showPage(id){
 function fmtDate(s){ if(!s)return'--'; return String(s).slice(5).replace(/-/g,'/'); }
 function fmtDt(iso){ if(!iso)return'--'; try{return new Date(iso).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return String(iso).slice(0,16);} }
 function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
-function card(title,hint,body){ return `<div class="card"><div class="card-h">${esc(title)}${hint?`<span class="hint">${esc(hint)}</span>`:''}</div>${body}</div>`; }
+function card(title,hint,body=''){ // hintRaw 以 '⚙' 前缀标记含可信 HTML 片段（如状态徽章），跳过转义
+  const hintHtml = (typeof hint==='string' && hint.startsWith('⚙')) ? hint.slice(1) : (hint?esc(hint):'');
+  return `<div class="card"><div class="card-h">${esc(title)}${hint?`<span class="hint">${hintHtml}</span>`:''}</div>${body??''}</div>`; }
 function emptyState(msg){ return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/></svg><div>${esc(msg)}</div></div>`; }
 
 async function loadJson(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(url+' -> '+r.status); return r.json(); }
@@ -400,7 +402,7 @@ function renderOverview(){
   const latestPlan=D.latestContentPlan||null;
   const planCore=latestPlan?.plan?.coreDirection||latestPlan?.plan?.schedule?.[0]?.topic||'—';
   let html=`
-  ${card('经营总览','数据截至 '+(o.latestCheck?fmtDt(o.latestCheck):'—')+ (o.dataFreshness==='过期'?` · <span class="badge b-warn">已过期</span>`:''))}
+  ${card('经营总览','⚙数据截至 '+(o.latestCheck?fmtDt(o.latestCheck):'—')+ (o.dataFreshness==='过期'?` · <span class="badge b-warn">已过期</span>`:''))}
 
   ${card('数据更新状态','看板只查看 · 由 WorkBuddy 自动采集与同步', `<span class="badge ${stb[0]}">${esc(db.overallStatus||'状态未知')}</span>`)}
   <div class="grid4" style="margin-bottom:6px">

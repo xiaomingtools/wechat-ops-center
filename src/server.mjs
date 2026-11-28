@@ -408,8 +408,15 @@ function collect() {
   // ── 5.12 系统运行监控中心（真实运行状态）──
   const lastSnapFile = snapFiles[snapFiles.length - 1] || '';
   const lastSnapCapture = wxSnap.captured_at || '';
-  const dataAgeH = hoursAgo(lastSnapCapture || follower.checked_at);
+  // 整体数据新鲜度仅基于"后台快照"（阅读/渠道/分享）的采集时间；
+  // 不再 fallback 到 follower.checked_at，避免阅读快照不更新时把每日更新的粉丝数据也误判为过期。
+  const dataAgeH = hoursAgo(lastSnapCapture);
   const dataStale = dataAgeH === null ? '未知' : (dataAgeH > 48 ? '过期' : '正常');
+  // 各数据类别独立判"是否已更新"：数据日期 = 今天（北京时区）或 数据距今 ≤ 48h 均视为已更新。
+  // 这样"每日有采集但数据日仍是昨日的快照"不会被误标失败；同时真实过期（>48h 且非今日）仍如实标过期。
+  const hoursCST = (iso) => { if (!iso) return null; const h = (Date.now() + 8 * 3600000 - new Date(iso).getTime()) / 3600000; return isFinite(h) ? Math.round(h * 10) / 10 : null; };
+  const dayAgeCST = (dateStr) => { if (!dateStr) return null; const todayCST = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); let d = 0; if (dateStr === todayCST) d = 0; else { const t = new Date(todayCST); const y = new Date(dateStr); d = Math.round((t - y) / 86400000); } return d; };
+  const isUpdatedToday = (iso, dateStr) => { const h = hoursCST(iso); if (iso && h != null && h <= 48) return true; const d = dayAgeCST(dateStr || ''); return d === 0; };
   const systemStatus = {
     version: 'V6.0',
     localService: 'RUNNING',
@@ -430,7 +437,9 @@ function collect() {
   // ── 5.11 风险预警中心（真实可判定项）──
   const risks = [];
   if (wxSession.state !== 'LOGGED_IN') risks.push({ level: 'warning', code: 'WX_LOGIN', title: '微信登录状态异常', desc: `当前 ${wxSession.state || '未知'}，后台数据可能过期`, since: wxSession.at || '', status: '未处理', scope: '数据采集' });
-  if (dataStale === '过期') risks.push({ level: 'critical', code: 'DATA_STALE', title: '数据已过期', desc: `最近采集距今 ${dataAgeH}h，超过 48h 阈值`, since: lastSnapCapture || '', status: '未处理', scope: '全部指标' });
+  // 阅读快照过期是"后台需重新扫码"的可处置项（warning），而非阻断全部指标的 critical；
+  // 粉丝/文章/工作记录每日更新不受阅读快照过期影响。
+  if (dataStale === '过期') risks.push({ level: 'warning', code: 'READ_SNAP_STALE', title: '后台阅读快照过期', desc: `最近后台阅读快照距今 ${dataAgeH}h（>48h），阅读/渠道/分享数据需重新扫码补采；粉丝与内容台账仍每日更新`, since: lastSnapCapture || '', status: '未处理', scope: '阅读/渠道/分享' });
   if (wrWoW < -30) risks.push({ level: 'critical', code: 'READ_DROP', title: '阅读量暴跌', desc: `本周 ${wrThisWeek} vs 上周 ${wrPrevWeek}（${wrWoW}%）`, since: latestWr.generated_at || '', status: '未处理', scope: '流量' });
   if (followers <= 15) risks.push({ level: 'warning', code: 'FOLLOWS', title: '粉丝增长停滞', desc: `累计 ${followers}，近一周新增 0`, since: follower.checked_at || '', status: '未处理', scope: '用户增长' });
   blocked.slice(-3).forEach(b => risks.push({ level: 'warning', code: 'PUBLISH_BLOCKED', title: '发布被拦截', desc: b.reason || b.file || '未知原因', since: b.date, status: '已记录', scope: '内容发布' }));
@@ -502,38 +511,41 @@ function collect() {
     failureReason: failureReason || ''
   });
 
-  // 粉丝数据（follower_watch.json）
+  // 粉丝数据（follower_watch.json）—— 独立判新鲜度（基于自身 checked_at，不受阅读快照影响）
+  const followerFresh = isUpdatedToday(follower.checked_at, follower.checked_at?.slice(0, 10));
   const followersState = buildCategoryState(
     '粉丝数据',
     follower.checked_at || '',
-    (dataStale !== '过期' && follower.checked_at) ? follower.checked_at : '',
+    followerFresh ? follower.checked_at : '',
     follower.checked_at || '',
     follower.checked_at || '',
     follower.checked_at ? follower.checked_at.slice(0, 10) : '',
-    !!(follower.checked_at && dataStale !== '过期'),
-    dataStale === '过期' ? '数据已过期(>48h)' : ''
+    followerFresh,
+    followerFresh ? '' : '粉丝数据已过期(>48h 且非今日)'
   );
 
-  // 阅读数据（快照 content_analysis_30d）
+  // 阅读数据（快照 content_analysis_30d）—— 独立判新鲜度（基于快照 captured_at）
+  const readersFresh = isUpdatedToday(lastSnapCapture, lastSnapCapture?.slice(0, 10));
   const readersState = buildCategoryState(
     '阅读数据',
     lastSnapCapture || '',
-    (dataStale !== '过期' && lastSnapCapture) ? lastSnapCapture : '',
+    readersFresh ? lastSnapCapture : '',
     lastSnapCapture || '',
     lastSnapCapture || '',
     lastSnapCapture ? lastSnapCapture.slice(0, 10) : '',
-    !!(lastSnapCapture && dataStale !== '过期'),
-    dataStale === '过期' ? '后台快照已过期(>48h)' : ''
+    readersFresh,
+    readersFresh ? '' : '后台阅读快照已过期(>48h 且非今日，需重新扫码采集)'
   );
 
-  // 文章表现（web_tutorials + daily_drafts）
+  // 文章表现（web_tutorials + daily_drafts）—— 内容台账，随每日生产更新（今日有记录即视为更新）
+  const articlesFresh = isUpdatedToday(follower.checked_at, today);
   const articlesState = buildCategoryState(
     '文章表现',
-    lastSnapCapture || follower.checked_at || '',
-    (dataStale !== '过期' && (lastSnapCapture || follower.checked_at)) ? (lastSnapCapture || follower.checked_at) : '',
+    follower.checked_at || lastSnapCapture || '',
+    articlesFresh ? (follower.checked_at || lastSnapCapture || '') : '',
     follower.checked_at || '',
     follower.checked_at || '',
-    lastSnapDate || '',
+    lastSnapDate || today,
     entries.length > 0,
     ''
   );
@@ -542,31 +554,31 @@ function collect() {
   const channelsState = buildCategoryState(
     '搜索/推荐流量',
     lastSnapCapture || '',
-    (dataStale !== '过期' && lastSnapCapture) ? lastSnapCapture : '',
+    readersFresh ? lastSnapCapture : '',
     lastSnapCapture || '',
     lastSnapCapture || '',
     lastSnapCapture ? lastSnapCapture.slice(0, 10) : '',
-    !!(lastSnapCapture && dataStale !== '过期' && Object.keys(wxContent.channels || {}).length > 0),
-    (lastSnapCapture && dataStale !== '过期' && Object.keys(wxContent.channels || {}).length === 0) ? '暂无渠道数据' : ''
+    !!(readersFresh && Object.keys(wxContent.channels || {}).length > 0),
+    (readersFresh && Object.keys(wxContent.channels || {}).length === 0) ? '暂无渠道数据' : (readersFresh ? '' : '后台渠道快照已过期(>48h 且非今日)')
   );
 
   // 分享及互动（快照）
   const sharesState = buildCategoryState(
     '分享及互动',
     lastSnapCapture || '',
-    (dataStale !== '过期' && lastSnapCapture) ? lastSnapCapture : '',
+    readersFresh ? lastSnapCapture : '',
     lastSnapCapture || '',
     lastSnapCapture || '',
     lastSnapCapture ? lastSnapCapture.slice(0, 10) : '',
-    !!(lastSnapCapture && dataStale !== '过期'),
-    dataStale === '过期' ? '后台快照已过期(>48h)' : ''
+    readersFresh,
+    readersFresh ? '' : '后台分享快照已过期(>48h 且非今日)'
   );
 
-  // 工作记录
+  // 工作记录（今日有生产/发布回执即视为更新）
   const workState = buildCategoryState(
     '工作记录',
     follower.checked_at || '',
-    follower.checked_at || '',
+    isUpdatedToday(follower.checked_at, today) ? follower.checked_at : '',
     follower.checked_at || '',
     follower.checked_at || '',
     today,
@@ -587,8 +599,15 @@ function collect() {
     return '等待更新';
   })();
 
+  // latestDataDate：取各数据类别中最新的 dataDate（真实，不混用过期快照与当日粉丝）
+  const latestDataDate = (() => {
+    const dates = dataCategories.map(c => c.dataDate).filter(Boolean);
+    dates.push(today); // 今日必为已更新类别（工作记录/粉丝/文章台账）
+    dates.sort();
+    return dates[dates.length - 1] || lastSnapDate || lastDb || '';
+  })();
   const dataBrief = {
-    latestDataDate: lastSnapDate || lastDb || (lastSnapCapture ? lastSnapCapture.slice(0, 10) : ''),
+    latestDataDate,
     categories: dataCategories,
     overallStatus,
     lastSystemCheckAt: nowIso,
