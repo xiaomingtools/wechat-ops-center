@@ -13,3 +13,6 @@ check_cloud.json
 data/.appdata.cloud.json
 data/.appdata.old.json
 data/.appdata.new.json
+
+# 临时核验/测试截图（不入库）
+09_备份/reauth_banner_*.png
