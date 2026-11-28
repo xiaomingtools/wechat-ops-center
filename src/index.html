@@ -38,6 +38,30 @@ body{background:var(--bg);color:var(--title);font-family:-apple-system,"PingFang
 .stale-tip{font-size:11px;color:var(--warn);display:none}
 .stale-tip.show{display:inline}
 
+/* ── 重新授权横幅（登录态过期时弹出）── */
+.reauth{display:none;margin:10px 16px 0;background:color-mix(in srgb,var(--crit) 6%,var(--card));border:1px solid color-mix(in srgb,var(--crit) 32%,transparent);border-left:4px solid var(--crit);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.reauth.show{display:block}
+.reauth .rh{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:800;color:var(--crit);margin-bottom:10px}
+.reauth .rh svg{width:18px;height:18px;flex:none}
+.reauth .body{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.reauth .qbox{flex:none;width:232px}
+.reauth .qr{width:200px;height:200px;border-radius:10px;border:1px solid var(--border);background:#fff;object-fit:contain;display:block}
+.reauth .qlbl{font-size:11px;color:var(--sub);margin-top:6px;text-align:center}
+.reauth .info{flex:1;min-width:220px;font-size:12.5px;color:var(--body);line-height:1.75}
+.reauth .info .step{display:flex;gap:8px;margin:4px 0}
+.reauth .info .step b{color:var(--title)}
+.reauth .act{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.reauth button{font:inherit;font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;border:1px solid var(--crit);background:var(--crit);color:#fff;transition:opacity .15s}
+.reauth button:hover{opacity:.9}
+.reauth button.ghost{background:transparent;color:var(--crit)}
+.reauth .okbox{display:none;align-items:center;gap:10px}
+.reauth .okbox svg{width:34px;height:34px;color:var(--ok)}
+.reauth .okbox .t{font-size:14px;font-weight:800;color:var(--ok)}
+.reauth .okbox .m{font-size:12px;color:var(--sub)}
+.reauth.logged .rh{color:var(--ok)}
+.reauth.logged{border-left-color:var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--card))}
+.reauth.logged .qr,.reauth.logged .qlbl,.reauth.logged .info{display:none}
+
 /* ── header ── */
 .header{padding:20px 20px 14px}
 .header h1{font-size:20px;font-weight:800;color:var(--title);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -194,6 +218,9 @@ canvas{width:100%!important;height:180px!important;display:block}
 </div>
 
 <div class="tabs" id="tabbar"></div>
+
+<!-- 重新授权横幅：登录态过期时弹出（二维码 + 一键发起 + 轮询刷新） -->
+<div id="reauthBanner" class="reauth"></div>
 
 <!-- ═══ 1 经营总览 ═══ -->
 <div class="page" id="page-overview"></div>
@@ -375,6 +402,8 @@ async function fetchData(){
     document.getElementById('connDot').className='dot ok';
     document.getElementById('staleTip').classList.toggle('show', D.overview?.dataFreshness==='过期');
     renderAll();
+    updateReauthBanner();
+    if(D.overview?.wxLoginState && D.overview.wxLoginState!=='LOGGED_IN'){ checkReauth(); }
   }catch(e2){
     document.getElementById('connDot').className='dot off';
     document.getElementById('connText').textContent='连接失败，重试中…';
@@ -1043,6 +1072,87 @@ async function loadReviews(){
     if(r.ok){ REVIEWS=(await r.json()).reviews||[]; }
   }catch(e){ /* 无该端点则跳过，复盘区显示暂无 */ }
 }
+
+/* ── 重新授权（登录态过期时看板弹出）── */
+let reauthPoll=null, reauthPhase='', reauthQrTs=0;
+function reauthNeeded(){
+  const o=D.overview||{};
+  // 仅登录态过期才提示（核心场景）；登录正常时数据过期属于其他原因，不在此横幅处理
+  if(o.wxLoginState && o.wxLoginState!=='LOGGED_IN') return true;
+  if(o.dataBrief && o.dataBrief.overallStatus==='登录状态过期') return true;
+  return false;
+}
+function updateReauthBanner(){
+  const el=document.getElementById('reauthBanner'); if(!el) return;
+  // LOGGED_IN 成功态：仅在"发起扫码 → 登录成功"这一瞬间显示 8 秒；
+  // 用户主动"暂不处理"或重新打开页面且已登录时，不显示。
+  if(reauthPhase==='LOGGED_IN'){
+    const o=D.overview||{};
+    // 仅当 reauthPoll 还在跑（说明是"发起后扫码成功"路径）才显示确认
+    if(!reauthPoll){ el.classList.remove('show','logged'); el.innerHTML=''; return; }
+    el.classList.add('show','logged');
+    el.innerHTML=`<div class="rh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>微信后台已重新登录，数据恢复更新</div>
+      <div class="okbox" style="display:flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+      <div><div class="t">登录态正常</div><div class="m">后台数据将按 09:00 / 12:00 / 23:00 自动恢复采集，看板 30 秒内自动刷新最新数据。</div></div></div>`;
+    clearInterval(reauthPoll); reauthPoll=null;
+    setTimeout(()=>{ el.classList.remove('show','logged'); el.innerHTML=''; reauthPhase='unknown'; }, 8000);
+    return;
+  }
+  if(!reauthNeeded()){ el.classList.remove('show'); el.innerHTML=''; return; }
+  const qrOn=reauthPhase==='WAITING_SCAN';
+  el.classList.add('show'); el.classList.remove('logged');
+  el.innerHTML=`
+  <div class="rh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>微信后台登录态已过期 · 后台数据需重新扫码</div>
+  <div class="body">
+    <div class="qbox">
+      ${qrOn?`<img id="reauthQr" class="qr" src="/qr-image?t=${reauthQrTs}" alt="扫码二维码">`:'<div style="width:200px;height:200px;border-radius:10px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--dim)">等待发起扫码</div>'}
+      <div class="qlbl">${qrOn?'请用公众号绑定手机微信扫码':'点击下方按钮发起扫码'}</div>
+    </div>
+    <div class="info">
+      <div class="step"><b>①</b> 点击右侧「发起重新授权」，本机将打开浏览器展示微信登录二维码</div>
+      <div class="step"><b>②</b> 用绑定该公众号的微信扫码确认登录</div>
+      <div class="step"><b>③</b> 登录成功后本看板 30 秒内自动恢复最新数据（看板只查看，不启动其他任务）</div>
+      <div class="act">
+        <button id="reauthGo">${reauthPhase==='WAITING_SCAN'?'刷新二维码并检查':'发起重新授权'}</button>
+        <button class="ghost" onclick="closeReauth()">暂不处理</button>
+      </div>
+    </div>
+  </div>`;
+  document.getElementById('reauthGo').onclick=reauthGo;
+}
+async function checkReauth(){
+  try{
+    const r=await fetch('/api/reauthorize',{cache:'no-store'}); if(!r.ok) return;
+    const d=await r.json(); reauthPhase=d.reauthorize?.phase||'unknown';
+    // WAITING_SCAN：二维码已在本地刷新（mtime 在 5 分钟内），强制刷新 <img>
+    if(reauthPhase==='WAITING_SCAN' && d.reauthorize?.qr?.fresh) reauthQrTs=Date.now();
+    updateReauthBanner();
+  }catch(e){ /* 本地 :3001 才有该端点；云数据兜底时静默跳过 */ }
+}
+async function reauthGo(){
+  try{
+    const r=await fetch('/api/reauthorize',{method:'POST',cache:'no-store'});
+    if(!r.ok) throw new Error('reauthorize '+r.status);
+    const d=await r.json(); reauthPhase=d.reauthorize?.phase||'STARTING';
+    // 若扫码脚本已把新二维码写入且 mtime 在 5 分钟内，立即展示；否则保持 placeholder
+    if(d.reauthorize?.qr?.fresh) reauthQrTs=Date.now();
+    updateReauthBanner();
+  }catch(e){ reauthPhase='EXPIRED'; updateReauthBanner(); return; }
+  if(reauthPoll) clearInterval(reauthPoll);
+  reauthPoll=setInterval(async()=>{
+    try{
+      const r=await fetch('/api/reauthorize',{cache:'no-store'}); const d=await r.json();
+      const p=d.reauthorize?.phase;
+      reauthPhase=p||'unknown';
+      // 二维码刷新了，强制重新拉一次
+      if(p==='WAITING_SCAN' && d.reauthorize?.qr?.fresh) reauthQrTs=Date.now();
+      if(p==='LOGGED_IN'){ clearInterval(reauthPoll); reauthPoll=null; fetchData(); updateReauthBanner(); return; }
+      if(p==='TIMED_OUT'){ clearInterval(reauthPoll); reauthPoll=null; reauthQrTs=0; updateReauthBanner(); return; }
+      updateReauthBanner();
+    }catch(e){}
+  },20000);
+}
+function closeReauth(){ const el=document.getElementById('reauthBanner'); el.classList.remove('show'); el.innerHTML=''; }
 
 /* ── 启动 ── */
 buildTabs();

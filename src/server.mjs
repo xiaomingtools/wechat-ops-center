@@ -5,9 +5,10 @@
 //         + V6.0 经营日历 / 文章生命周期 / 经营实验 / 经验沉淀 / 经营目标追踪
 // ============================================================
 import http from "node:http";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = import.meta.dirname;
 
@@ -64,6 +65,76 @@ const latestWr  = wrFiles.length > 0 ? loadJson(join(wrDir, wrFiles[wrFiles.leng
 const follower  = loadJson(join(ROOT, "10_运营数据", "follower_watch.json")) || {};
 const wxSession = loadJson(join(ROOT, "10_运营数据", "wx_session", "status.json")) || {};
 
+// ── 重新授权（登录态过期时看板发起）────────────────────────
+// 扫码脚本：automation/wx_login_session_v2.py（有头 Playwright，二维码截图写
+//   10_运营数据/wx_session/qr_latest.png，登录成功写 status.json）。
+// 二维码 PNG 经 /qr-image 端点返回，前端展示并定时刷新；后端不缓存登录态，
+// 每次 /api/reauthorize 重新读 status.json，登录成功即反映为 LOGGED_IN。
+const WX_SESSION_DIR   = join(ROOT, "10_运营数据", "wx_session");
+const QR_LATEST        = join(WX_SESSION_DIR, "qr_latest.png");
+const WX_STATUS        = join(WX_SESSION_DIR, "status.json");
+const LOGIN_SCRIPT     = join(ROOT, "automation", "wx_login_session_v2.py");
+const PY_CANDIDATES = [
+  process.env.WX_PYTHON,
+  "C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/pythonw.exe",
+  "C:/Users/Administrator/.workbuddy/binaries/python/envs/default/Scripts/python.exe",
+].filter(Boolean);
+
+let reauthProc = null;        // 当前扫码进程
+let reauthStartAt = null;     // 启动时间（用于 30 分钟超时自判）
+let reauthLastErr = "";
+
+function startReauth() {
+  if (reauthProc && reauthProc.exitCode === null) return; // 已有在跑
+  const py = PY_CANDIDATES.find(p => existsSync(p)) || PY_CANDIDATES[0];
+  try { reauthProc = spawn(py, [LOGIN_SCRIPT], {
+    cwd: ROOT, detached: true, stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  });
+  reauthStartAt = Date.now();
+  reauthProc.stdout?.on("data", d => { reauthLastErr = ""; });
+  reauthProc.stderr?.on("data", d => { reauthLastErr = String(d).slice(-300); });
+  reauthProc.on("exit", (code, sig) => {
+    if (sig) reauthLastErr = `进程被信号 ${sig} 终止`;
+    else if (code !== 0) reauthLastErr = reauthLastErr || `扫码进程退出码 ${code}`;
+    reauthProc = null; reauthStartAt = null;
+  });
+  reauthProc.unref();
+  } catch (e) {
+    reauthLastErr = String(e && e.message || e).slice(0, 300);
+    reauthProc = null; reauthStartAt = null;
+  }
+}
+
+function reauthStatus() {
+  const running = !!(reauthProc && reauthProc.exitCode === null);
+  const st = loadJson(WX_STATUS) || {};
+  const state = st.state || "UNKNOWN";
+  const qrInfo = (() => {
+    if (!existsSync(QR_LATEST)) return { exists: false, path: "/qr-image", mtimeMs: null };
+    try {
+      const m = statSync(QR_LATEST).mtimeMs;
+      const ageMin = Math.round((Date.now() - m) / 60000);
+      return { exists: true, path: "/qr-image", mtimeMs: m, ageMin, fresh: ageMin <= 5 };
+    } catch { return { exists: true, path: "/qr-image", mtimeMs: null, fresh: false }; }
+  })();
+  const startedMin = reauthStartAt ? Math.round((Date.now() - reauthStartAt) / 60000) : null;
+  // 30 分钟无成功则视为本次尝试超时（与脚本 25min deadline 对齐后留缓冲）
+  const timedOut = running && startedMin != null && startedMin > 30;
+  if (timedOut) { try { reauthProc?.kill(); } catch {} reauthProc = null; reauthStartAt = null; }
+  const effectiveRunning = running && !timedOut;
+  let phase;
+  if (state === "LOGGED_IN") phase = "LOGGED_IN";
+  else if (effectiveRunning && qrInfo.exists && qrInfo.fresh) phase = "WAITING_SCAN";
+  else if (effectiveRunning) phase = "STARTING";
+  else if (st.state === "TIMEOUT") phase = "TIMED_OUT";
+  else phase = "EXPIRED";
+  return {
+    login: { state, at: st.at || "", label: st.state === "LOGGED_IN" ? "● 登录正常" : st.state === "NEEDS_REFRESH" ? "● 需重新扫码" : st.state === "TIMEOUT" ? "● 扫码超时" : "● 登录已过期" },
+    reauthorize: { running: effectiveRunning, phase, qr: qrInfo, lastErr: timedOut ? "扫码流程超时，请重新发起" : reauthLastErr, startedMin: startedMin, startedAt: reauthStartAt ? new Date(reauthStartAt).toISOString() : null },
+  };
+}
+
 // ── V5.2 归档目录（只读真实文件；缺失一律返回空，不虚构）──
 const dbDir   = join(ROOT, "10_运营数据", "daily_brief");
 const wrsDir  = join(ROOT, "10_运营数据", "weekly_resolution");
@@ -91,6 +162,9 @@ try {
 
 // ─── build ──────────────────────────────────────────────────
 function collect() {
+  // 每次请求重读微信登录态文件，使 /api/app、/api/data 的 overview.wxLoginState 实时反映
+  // 重新扫码结果（前端在 wxLoginState !== LOGGED_IN 时弹出重新授权横幅，并轮询此值确认恢复）。
+  const liveWxSession = loadJson(WX_STATUS) || {};
   // 流量主官方门槛（提升为 collect() 顶部常量，供 annualPlan / businessGoals / revenue 等跨段引用；
   // 此前 const 声明在 P2 段内却被更早的 annualPlan 引用，产生 TDZ 运行时 ReferenceError，现统一上提至函数顶部）
   const TM_COMMISSION = 100;   // 官方：返佣商品/短剧推广能力门槛（微信官方运营专员口径）
@@ -423,20 +497,20 @@ function collect() {
     cloudService: 'ONLINE',
     dataInterface: 'OK',
     dataVersion: lastSnapFile,
-    lastDataCapture: lastSnapCapture || wxSession.at || '',
+    lastDataCapture: lastSnapCapture || liveWxSession.at || '',
     lastSnapshot: lastSnapFile,
     lastReport: wrFiles[wrFiles.length - 1] || '',
     lastSync: follower.checked_at || '',
     lastHealthyCheck: nowIso,
-    wxLogin: wxSession.state || 'UNKNOWN',
+    wxLogin: liveWxSession.state || 'UNKNOWN',
     dataFreshness: dataStale,
     dataAgeHours: dataAgeH,
-    integrity: (snapFiles.length > 0 && (wxSession.state || '')) ? '完整' : '部分缺失',
+    integrity: (snapFiles.length > 0 && (liveWxSession.state || '')) ? '完整' : '部分缺失',
   };
 
   // ── 5.11 风险预警中心（真实可判定项）──
   const risks = [];
-  if (wxSession.state !== 'LOGGED_IN') risks.push({ level: 'warning', code: 'WX_LOGIN', title: '微信登录状态异常', desc: `当前 ${wxSession.state || '未知'}，后台数据可能过期`, since: wxSession.at || '', status: '未处理', scope: '数据采集' });
+  if (liveWxSession.state !== 'LOGGED_IN') risks.push({ level: 'warning', code: 'WX_LOGIN', title: '微信登录状态异常', desc: `当前 ${liveWxSession.state || '未知'}，后台数据可能过期`, since: liveWxSession.at || '', status: '未处理', scope: '数据采集' });
   // 阅读快照过期是"后台需重新扫码"的可处置项（warning），而非阻断全部指标的 critical；
   // 粉丝/文章/工作记录每日更新不受阅读快照过期影响。
   if (dataStale === '过期') risks.push({ level: 'warning', code: 'READ_SNAP_STALE', title: '后台阅读快照过期', desc: `最近后台阅读快照距今 ${dataAgeH}h（>48h），阅读/渠道/分享数据需重新扫码补采；粉丝与内容台账仍每日更新`, since: lastSnapCapture || '', status: '未处理', scope: '阅读/渠道/分享' });
@@ -476,7 +550,7 @@ function collect() {
     followers: { value: followers, state: followers > 0 ? 'real' : 'zero_real', source: 'follower_watch.json', asOf: follower.checked_at || '' },
     readers30d: { value: totalReaders30d, state: totalReaders30d > 0 ? 'real' : 'no_data', source: '后台30天内容分析', asOf: lastSnapCapture },
     revenue: { value: null, state: 'not_connected', source: '无数据权限', asOf: '' },
-    wxLogin: { value: wxSession.state || 'UNKNOWN', state: 'real', source: 'wx_session/status.json', asOf: wxSession.at || '' },
+    wxLogin: { value: liveWxSession.state || 'UNKNOWN', state: 'real', source: 'wx_session/status.json', asOf: liveWxSession.at || '' },
     sync: { value: follower.checked_at || '', state: dataStale === '过期' ? 'stale' : 'real', source: 'follower_watch.checked_at' },
   };
 
@@ -592,7 +666,7 @@ function collect() {
   const failureReasons = dataCategories.filter(c => c.failureReason).map(c => `${c.category}: ${c.failureReason}`).join('; ');
 
   const overallStatus = (() => {
-    if (wxSession.state !== 'LOGGED_IN') return '登录状态过期';
+    if (liveWxSession.state !== 'LOGGED_IN') return '登录状态过期';
     if (allComplete) return '今日完整更新';
     if (anyComplete) return '部分数据已更新';
     if (failureReasons) return `采集失败: ${failureReasons}`;
@@ -785,8 +859,8 @@ function collect() {
     account: man.account || "AI工具研究所",
     overview: {
       totalArticles, publishedCount, pendingDrafts, followers, followerTarget, followerPct,
-      wxLoginState: wxSession.state || 'UNKNOWN',
-      wxLoginLabel: wxSession.state === 'LOGGED_IN' ? '● 登录正常' : wxSession.state === 'NEEDS_REFRESH' ? '● 需重新扫码' : '● 状态未知',
+      wxLoginState: liveWxSession.state || 'UNKNOWN',
+      wxLoginLabel: liveWxSession.state === 'LOGGED_IN' ? '● 登录正常' : liveWxSession.state === 'NEEDS_REFRESH' ? '● 需重新扫码' : '● 状态未知',
       alertCount: blocked.length, passRate,
       yesterdayReads, yesterdayChange, totalReaders30d,
       wrThisWeek, wrPrevWeek, wrWoW, searchPct, recommendPct,
@@ -865,6 +939,28 @@ const server = http.createServer((req, res) => {
   if (url.pathname === "/api/resolutions") { if (!appData.weeklyResolutions) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ weeklyResolutions: appData.weeklyResolutions, latest: appData.latestResolution })); return; }
   if (url.pathname === "/api/content-plans") { if (!appData.contentPlans) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ contentPlans: appData.contentPlans, latest: appData.latestContentPlan })); return; }
   if (url.pathname === "/api/update-log") { if (!appData.dataUpdateLog) collect(); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ dataUpdateLog: appData.dataUpdateLog })); return; }
+
+  // ── 重新授权端点（登录态过期时，看板发起/查看扫码流程）──
+  // GET  /api/reauthorize → 当前登录态 + 重新授权状态 + 二维码信息
+  // POST /api/reauthorize → 发起有头 Playwright 扫码（后台进程，返回 reauthStatus）
+  if (url.pathname === "/api/reauthorize") {
+    if (req.method === "POST") {
+      try { startReauth(); } catch (e) { reauthLastErr = String(e && e.message || e).slice(0, 300); }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(reauthStatus()));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(reauthStatus()));
+    return;
+  }
+  // 二维码图片端点：返回 10_运营数据/wx_session/qr_latest.png（扫码脚本实时刷新）
+  if (url.pathname === "/qr-image") {
+    if (!existsSync(QR_LATEST)) { res.writeHead(404, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "QR_NOT_READY" })); return; }
+    res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
+    res.end(readFileSync(QR_LATEST));
+    return;
+  }
 
   let filePath = join(__dirname, url.pathname === "/" ? "index.html" : url.pathname);
   if (existsSync(filePath)) {
